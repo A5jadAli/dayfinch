@@ -24,7 +24,6 @@ class Settings:
     invitation_hours: int = 168
     storage_backend: str = "local"
     s3_bucket: str = ""
-    s3_prefix: str = "dayfinch/screenshots"
     s3_region: str = "us-east-1"
     s3_endpoint_url: str = ""
     s3_sse: str = "AES256"
@@ -61,9 +60,6 @@ class Settings:
             invitation_hours=max(1, int(os.getenv("TRACKER_INVITATION_HOURS", "168"))),
             storage_backend=os.getenv("TRACKER_STORAGE_BACKEND", "local").strip().lower(),
             s3_bucket=os.getenv("TRACKER_S3_BUCKET", "").strip(),
-            s3_prefix=os.getenv(
-                "TRACKER_S3_PREFIX", "dayfinch/screenshots"
-            ).strip("/"),
             s3_region=os.getenv("TRACKER_S3_REGION", "us-east-1").strip(),
             s3_endpoint_url=os.getenv("TRACKER_S3_ENDPOINT_URL", "").strip(),
             s3_sse=os.getenv("TRACKER_S3_SSE", "AES256").strip(),

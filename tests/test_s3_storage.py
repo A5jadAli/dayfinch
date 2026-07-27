@@ -44,7 +44,6 @@ def test_s3_storage_keeps_version_for_exact_deletion(tmp_path, monkeypatch):
         retention_days=30,
         storage_backend="s3",
         s3_bucket="private-captures",
-        s3_prefix="tracker/screens",
     )
     storage = S3ScreenshotStorage(settings)
     stored = storage.save(
@@ -53,7 +52,7 @@ def test_s3_storage_keeps_version_for_exact_deletion(tmp_path, monkeypatch):
         datetime(2026, 7, 27, tzinfo=timezone.utc),
         b"\xff\xd8\xffimage",
     )
-    assert stored.key == "tracker/screens/device-id/2026/07/27/record-id.jpg"
+    assert stored.key == "device-id/2026/07/27/record-id.jpg"
     assert stored.version_id == "version-123"
     assert client.put_arguments["ServerSideEncryption"] == "AES256"
     assert storage.read(stored.key).data == b"\xff\xd8\xffstored"

@@ -46,12 +46,11 @@ def image_type(data: bytes) -> tuple[str, str]:
 
 
 def object_key(
-    prefix: str, device_id: str, record_id: str, captured_at: datetime, extension: str
+    device_id: str, record_id: str, captured_at: datetime, extension: str
 ) -> str:
     parts = [
         part
         for part in (
-            prefix.strip("/"),
             device_id,
             captured_at.strftime("%Y/%m/%d"),
             record_id + extension,
@@ -74,7 +73,7 @@ class LocalScreenshotStorage:
         self, device_id: str, record_id: str, captured_at: datetime, data: bytes
     ) -> StoredScreenshot:
         extension, _ = image_type(data)
-        relative = object_key("", device_id, record_id, captured_at, extension)
+        relative = object_key(device_id, record_id, captured_at, extension)
         destination = self._resolve(relative)
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_suffix(destination.suffix + ".part")
@@ -113,7 +112,6 @@ class S3ScreenshotStorage:
         except ImportError as exc:
             raise RuntimeError('Install S3 support with: pip install -e ".[s3]"') from exc
         self.bucket = settings.s3_bucket
-        self.prefix = settings.s3_prefix
         self.sse = settings.s3_sse
         self.kms_key_id = settings.s3_kms_key_id
         self.client = boto3.client(
@@ -126,7 +124,7 @@ class S3ScreenshotStorage:
         self, device_id: str, record_id: str, captured_at: datetime, data: bytes
     ) -> StoredScreenshot:
         extension, content_type = image_type(data)
-        key = object_key(self.prefix, device_id, record_id, captured_at, extension)
+        key = object_key(device_id, record_id, captured_at, extension)
         arguments: dict[str, object] = {
             "Bucket": self.bucket,
             "Key": key,
