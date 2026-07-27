@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Enrollment token{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <p class="eyebrow">One-time credential</p>
+  <h1>{{ device.name }}</h1>
+  <p>Copy this token now. Only its hash is stored, so it cannot be shown again.</p>
+  <pre class="token">{{ raw_token }}</pre>
+  <p class="warning">Treat this token like a password. It enrolls this device under {{ current_user.email }} and must only be placed in that device's local agent configuration.</p>
+  <a class="button" href="/">Done</a>
+</section>
+{% endblock %}

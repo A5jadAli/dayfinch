@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Invitation link · Tracker{% endblock %}
+{% block content %}
+<section class="panel narrow">
+  <p class="eyebrow">Admin only</p>
+  {% if error %}
+  <h1>Invitation not created</h1><p class="error">{{ error }}</p>
+  {% else %}
+  <h1>Share this link</h1>
+  <p>The one-time invitation for <strong>{{ invitation.email }}</strong> expires at {{ invitation.expires_at }}. The raw token is not stored and this URL cannot be recovered later.</p>
+  <input class="share-link" value="{{ invitation.url }}" readonly aria-label="Invitation URL" onclick="this.select()">
+  <p class="warning">Share it only with the intended person through an approved private channel.</p>
+  {% endif %}
+  <a class="button" href="/">Back to dashboard</a>
+</section>
+{% endblock %}

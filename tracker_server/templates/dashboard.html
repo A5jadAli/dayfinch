@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Devices · Tracker{% endblock %}
+{% block content %}
+<div class="heading-row">
+  <div>
+    <p class="eyebrow">{{ 'Administration' if current_user.role == 'admin' else 'Your workspace' }}</p>
+    <h1>Tracked devices</h1>
+    <p>{{ 'All enrolled devices are visible to administrators.' if current_user.role == 'admin' else 'Only devices enrolled under your account are shown.' }}</p>
+  </div>
+  <form method="post" action="/devices" class="enroll-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <input name="name" maxlength="100" placeholder="Laptop or workstation name" required>
+    <button type="submit">Enroll my device</button>
+  </form>
+</div>
+
+<section class="panel">
+  {% if devices %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Name</th>{% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}<th>Status</th><th>Platform</th><th>Last seen</th><th>Captures</th></tr></thead>
+    <tbody>
+      {% for device in devices %}
+      <tr>
+        <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+        {% if current_user.role == 'admin' %}<td>{{ device.owner_email or 'Legacy / unassigned' }}</td>{% endif %}
+        <td><span class="pill {{ 'ok' if device.enabled else 'off' }}">{{ device.last_status or ('enrolled' if device.enabled else 'revoked') }}</span></td>
+        <td>{{ device.platform or '—' }}</td>
+        <td>{{ device.last_seen_at or 'Never' }}</td>
+        <td>{{ device.record_count }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+  {% else %}
+  <div class="empty"><h2>No devices yet</h2><p>Enroll a device to receive its one-time agent token.</p></div>
+  {% endif %}
+</section>
+
+{% if current_user.role == 'admin' %}
+<section class="admin-grid">
+  <div class="panel">
+    <p class="eyebrow">Admin only</p>
+    <h2>Invite a person</h2>
+    <p>Add their email to create a one-time account link. You copy and share the link through your approved channel.</p>
+    <form method="post" action="/invitations" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Email <input name="email" type="email" maxlength="254" placeholder="person@company.com" required></label>
+      <button type="submit">Create invitation link</button>
+    </form>
+  </div>
+  <div class="panel">
+    <p class="eyebrow">Accounts</p>
+    <h2>Authorized people</h2>
+    <div class="table-wrap"><table>
+      <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Devices</th></tr></thead>
+      <tbody>{% for user in users %}<tr><td>{{ user.email }}</td><td>{{ user.role }}</td><td>{{ 'Active' if user.enabled else 'Invitation pending' }}</td><td>{{ user.device_count }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

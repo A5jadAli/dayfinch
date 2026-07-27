@@ -1,0 +1,13 @@
+# Copy this file to agent.toml on the tracked device.
+server_url = "http://127.0.0.1:8000"
+device_token = "paste-the-one-time-enrollment-token-here"
+
+# The employee/device owner must review the disclosure and explicitly change this.
+consent_confirmed = false
+
+capture_interval_seconds = 600
+heartbeat_interval_seconds = 60
+jpeg_quality = 65
+capture_all_monitors = true
+max_queue_items = 500
+queue_dir = "./runtime/agent-queue"

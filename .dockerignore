@@ -1,0 +1,12 @@
+.git
+.venv
+.agent-venv
+.pytest_cache
+.pytest-tmp
+__pycache__
+*.pyc
+runtime
+agent.toml
+tests
+docs
+packaging
