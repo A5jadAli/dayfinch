@@ -16,9 +16,8 @@ class TimesheetRepository(RepositoryMixin):
             open_session = connection.execute(
                 """SELECT 1 FROM work_sessions
                    WHERE user_id = %s AND status IN ('active', 'paused')
-                     AND started_at < (%s::date + INTERVAL '1 day')
                    LIMIT 1""",
-                (user_id, period_end),
+                (user_id,),
             ).fetchone()
             if open_session:
                 raise ValueError("Stop the active work session before submitting")

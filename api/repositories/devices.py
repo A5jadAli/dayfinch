@@ -77,7 +77,7 @@ class DevicesRepository(RepositoryMixin):
                     LEFT JOIN projects p ON p.id = d.project_id
                     LEFT JOIN activity_records a ON a.device_id = d.id
                     {where}
-                    GROUP BY d.id
+                    GROUP BY d.id, u.email, p.name
                     ORDER BY d.created_at DESC""",
                 tuple(values),
             ).fetchall()
@@ -97,5 +97,5 @@ class DevicesRepository(RepositoryMixin):
         with self.connect() as connection:
             connection.execute(
                 "UPDATE devices SET enabled = %s WHERE id = %s",
-                (int(enabled), device_id),
+                (enabled, device_id),
             )

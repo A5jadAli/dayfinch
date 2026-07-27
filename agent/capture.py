@@ -7,6 +7,7 @@ import uuid
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname
 
 from PIL import Image
 
@@ -145,7 +146,7 @@ async def _request_portal_screenshot() -> Path:
         parsed = urlparse(uri_value)
         if parsed.scheme != "file":
             raise CaptureUnavailable("Screenshot portal returned an unsupported URI")
-        path = Path(unquote(parsed.path))
+        path = Path(url2pathname(unquote(parsed.path)))
         if not path.is_file():
             raise CaptureUnavailable("Screenshot portal output is not accessible")
         return path
