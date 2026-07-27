@@ -36,14 +36,14 @@ package = ["pyinstaller>=6,<7"]
 s3 = ["boto3>=1.42,<2"]
 
 [project.scripts]
-dayfinch-server = "tracker_server.main:run"
-dayfinch-agent = "tracker_agent.main:run"
+dayfinch-server = "api.main:run"
+dayfinch-agent = "agent.main:run"
 
 [tool.setuptools.packages.find]
-include = ["tracker_server*", "tracker_agent*"]
+include = ["api*", "agent*", "ui*"]
 
 [tool.setuptools.package-data]
-tracker_server = ["templates/*.html", "static/*.css"]
+ui = ["templates/*.html", "static/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

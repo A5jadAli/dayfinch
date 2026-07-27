@@ -2,8 +2,8 @@ import sys
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
-from tracker_server.config import Settings
-from tracker_server.storage import S3ScreenshotStorage
+from api.config import Settings
+from api.storage import S3ScreenshotStorage
 
 
 class FakeBody:

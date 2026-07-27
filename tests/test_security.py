@@ -1,4 +1,4 @@
-from tracker_server.security import hash_password, verify_password
+from api.security import hash_password, verify_password
 
 
 def test_passwords_use_salted_scrypt_hashes():

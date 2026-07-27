@@ -1,5 +1,5 @@
-from tracker_server.database import Database
-from tracker_server.migrations import MIGRATIONS, apply_migrations
+from api.database import Database
+from api.migrations import MIGRATIONS, apply_migrations
 
 
 def test_device_tokens_are_hashed_and_revocable(database: Database):

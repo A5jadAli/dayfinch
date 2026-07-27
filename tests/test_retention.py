@@ -2,8 +2,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from tracker_server.database import Database
-from tracker_server.services.retention import RetentionService
+from api.database import Database
+from api.services.retention import RetentionService
 
 
 class FakeStorage:

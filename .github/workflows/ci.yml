@@ -32,5 +32,5 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: pip install -e ".[dev]"
-      - run: python -m compileall -q tracker_server tracker_agent tests
+      - run: python -m compileall -q api ui agent tests
       - run: python -m pytest

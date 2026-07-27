@@ -1,4 +1,4 @@
-from tracker_server.database import Database
+from api.database import Database
 
 
 def _setup(database: Database):

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
-from tracker_agent.activity import ActivitySnapshot
-from tracker_agent.queue import OfflineQueue
+from agent.activity import ActivitySnapshot
+from agent.queue import OfflineQueue
 
 
 def test_queue_is_bounded_and_acknowledges_files(tmp_path):

@@ -2,8 +2,8 @@ from datetime import date
 
 import pytest
 
-from tracker_server.database import Database
-from tracker_server.services.timesheets import TimesheetService
+from api.database import Database
+from api.services.timesheets import TimesheetService
 
 
 def _tracked_user(database: Database):

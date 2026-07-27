@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient
 
-from tracker_server.config import Settings
-from tracker_server.main import create_app
+from api.config import Settings
+from api.main import create_app
 
 
 def test_agent_authentication_and_idempotent_upload(tmp_path, postgres_url):

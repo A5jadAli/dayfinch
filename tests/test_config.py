@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from tracker_agent.config import AgentConfig
-from tracker_server.config import Settings
+from agent.config import AgentConfig
+from api.config import Settings
 
 
 TOKEN = "x" * 40

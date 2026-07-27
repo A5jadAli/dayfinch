@@ -2,9 +2,9 @@ import re
 
 from fastapi.testclient import TestClient
 
-from tracker_server.config import Settings
-from tracker_server.main import create_app
-from tracker_server.security import hash_password, verify_password
+from api.config import Settings
+from api.main import create_app
+from api.security import hash_password, verify_password
 
 
 def _csrf(response) -> str:

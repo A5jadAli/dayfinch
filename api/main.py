@@ -26,6 +26,7 @@ from .web import WebSecurity
 
 
 PACKAGE_DIR = Path(__file__).resolve().parent
+UI_DIR = PACKAGE_DIR.parent / "ui"
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -64,7 +65,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.retention = retention
     app.state.web = WebSecurity(database)
     app.state.timesheets = TimesheetService(database)
-    app.state.templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
+    app.state.templates = Jinja2Templates(directory=UI_DIR / "templates")
     app.state.dummy_password_hash = hash_password("invalid-password-for-timing-only")
     app.add_middleware(
         SessionMiddleware,
@@ -74,7 +75,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         https_only=settings.cookie_secure,
         max_age=8 * 60 * 60,
     )
-    app.mount("/static", StaticFiles(directory=PACKAGE_DIR / "static"), name="static")
+    app.mount("/static", StaticFiles(directory=UI_DIR / "static"), name="static")
     app.include_router(auth_router)
     app.include_router(dashboard_router)
     app.include_router(projects_router)
@@ -96,7 +97,7 @@ app = create_app()
 def run() -> None:
     import uvicorn
 
-    uvicorn.run("tracker_server.main:app", host="127.0.0.1", port=8000, reload=False)
+    uvicorn.run("api.main:app", host="127.0.0.1", port=8000, reload=False)
 
 
 if __name__ == "__main__":

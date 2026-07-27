@@ -12,15 +12,17 @@ services:
       retries: 12
     volumes:
       - dayfinch-postgres:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5432:5432"
     restart: unless-stopped
 
   dayfinch-server:
     build: .
     environment:
       TRACKER_ADMIN_PASSWORD: ${TRACKER_ADMIN_PASSWORD:?Set TRACKER_ADMIN_PASSWORD in .env}
-      TRACKER_ADMIN_EMAIL: ${TRACKER_ADMIN_EMAIL:?Set TRACKER_ADMIN_EMAIL in .env}
+      TRACKER_ADMIN_EMAIL: ${TRACKER_ADMIN_EMAIL:-admin@example.local}
       TRACKER_SESSION_SECRET: ${TRACKER_SESSION_SECRET:?Set TRACKER_SESSION_SECRET in .env}
-      TRACKER_DATABASE_URL: ${TRACKER_DATABASE_URL:?Set TRACKER_DATABASE_URL in .env}
+      TRACKER_DATABASE_URL: postgresql://dayfinch:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@postgres:5432/dayfinch
       TRACKER_DATABASE_MIN_POOL_SIZE: ${TRACKER_DATABASE_MIN_POOL_SIZE:-1}
       TRACKER_DATABASE_MAX_POOL_SIZE: ${TRACKER_DATABASE_MAX_POOL_SIZE:-10}
       TRACKER_COOKIE_SECURE: "false"

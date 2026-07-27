@@ -1,4 +1,4 @@
-from tracker_agent.activity import ActivityMonitor
+from agent.activity import ActivityMonitor
 
 
 def test_activity_monitor_keeps_counts_not_key_values():

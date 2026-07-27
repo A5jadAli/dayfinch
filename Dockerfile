@@ -6,7 +6,8 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 COPY pyproject.toml README.md ./
-COPY tracker_server ./tracker_server
+COPY api ./api
+COPY ui ./ui
 RUN pip install --no-cache-dir ".[s3]"
 
 RUN useradd --create-home --uid 10001 tracker && \
@@ -14,4 +15,4 @@ RUN useradd --create-home --uid 10001 tracker && \
 USER tracker
 
 EXPOSE 8000
-CMD ["uvicorn", "tracker_server.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]

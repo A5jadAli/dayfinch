@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from tracker_server.storage import ScreenshotStorage
+from api.storage import ScreenshotStorage
 
 
 def test_storage_accepts_images_and_confines_paths(tmp_path):

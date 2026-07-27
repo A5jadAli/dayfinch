@@ -2,7 +2,7 @@ import os
 
 import pytest
 
-from tracker_server.database import Database
+from api.database import Database
 
 
 @pytest.fixture
