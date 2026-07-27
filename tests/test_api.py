@@ -4,7 +4,7 @@ from tracker_server.config import Settings
 from tracker_server.main import create_app
 
 
-def test_agent_authentication_and_idempotent_upload(tmp_path):
+def test_agent_authentication_and_idempotent_upload(tmp_path, postgres_url):
     settings = Settings(
         data_dir=tmp_path,
         admin_password="correct horse battery staple",
@@ -12,6 +12,7 @@ def test_agent_authentication_and_idempotent_upload(tmp_path):
         cookie_secure=False,
         max_upload_bytes=1024 * 1024,
         retention_days=30,
+        database_url=postgres_url,
     )
     app = create_app(settings)
     with TestClient(app) as client:

@@ -25,7 +25,7 @@ class DevicesRepository(RepositoryMixin):
         with self.connect() as connection:
             connection.execute(
                 """INSERT INTO devices(id, name, token_hash, created_at, owner_user_id, project_id)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
+                   VALUES (%s, %s, %s, %s, %s, %s)""",
                 (
                     device["id"],
                     device["name"],
@@ -42,7 +42,7 @@ class DevicesRepository(RepositoryMixin):
             return None
         with self.connect() as connection:
             row = connection.execute(
-                "SELECT * FROM devices WHERE token_hash = ? AND enabled = 1",
+                "SELECT * FROM devices WHERE token_hash = %s AND enabled = TRUE",
                 (token_hash(raw_token),),
             ).fetchone()
         return dict(row) if row else None
@@ -50,9 +50,9 @@ class DevicesRepository(RepositoryMixin):
     def touch_device(self, device_id: str, platform: str, status: str) -> None:
         with self.connect() as connection:
             connection.execute(
-                """UPDATE devices SET last_seen_at = ?,
-                          platform = COALESCE(NULLIF(?, ''), platform), last_status = ?
-                   WHERE id = ?""",
+                """UPDATE devices SET last_seen_at = %s,
+                          platform = COALESCE(NULLIF(%s, ''), platform), last_status = %s
+                   WHERE id = %s""",
                 (utc_now(), platform[:80], status[:40], device_id),
             )
 
@@ -62,10 +62,10 @@ class DevicesRepository(RepositoryMixin):
         filters: list[str] = []
         values: list[str] = []
         if owner_user_id is not None:
-            filters.append("d.owner_user_id = ?")
+            filters.append("d.owner_user_id = %s")
             values.append(owner_user_id)
         if project_id is not None:
-            filters.append("d.project_id = ?")
+            filters.append("d.project_id = %s")
             values.append(project_id)
         where = f"WHERE {' AND '.join(filters)}" if filters else ""
         with self.connect() as connection:
@@ -88,7 +88,7 @@ class DevicesRepository(RepositoryMixin):
             row = connection.execute(
                 """SELECT d.*, u.email AS owner_email, p.name AS project_name FROM devices d
                    LEFT JOIN users u ON u.id = d.owner_user_id
-                   LEFT JOIN projects p ON p.id = d.project_id WHERE d.id = ?""",
+                   LEFT JOIN projects p ON p.id = d.project_id WHERE d.id = %s""",
                 (device_id,),
             ).fetchone()
         return dict(row) if row else None
@@ -96,6 +96,6 @@ class DevicesRepository(RepositoryMixin):
     def set_device_enabled(self, device_id: str, enabled: bool) -> None:
         with self.connect() as connection:
             connection.execute(
-                "UPDATE devices SET enabled = ? WHERE id = ?",
+                "UPDATE devices SET enabled = %s WHERE id = %s",
                 (int(enabled), device_id),
             )

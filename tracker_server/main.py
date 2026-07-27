@@ -29,7 +29,11 @@ PACKAGE_DIR = Path(__file__).resolve().parent
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     settings.prepare()
-    database = Database(settings.database_path)
+    database = Database(
+        settings.database_url,
+        min_pool_size=settings.database_min_pool_size,
+        max_pool_size=settings.database_max_pool_size,
+    )
     storage = create_storage(settings)
     retention = RetentionService(database, storage, settings.retention_days)
 
@@ -49,6 +53,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 await task
             except asyncio.CancelledError:
                 pass
+            database.close()
 
     app = FastAPI(title="Dayfinch", version="0.3.0", lifespan=lifespan)
     app.state.settings = settings

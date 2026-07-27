@@ -48,7 +48,7 @@ installers, and an external security review before a production rollout.
 ## Project layout
 
 ```text
-tracker_server/     FastAPI API, SQLite data layer, storage, admin dashboard
+tracker_server/     FastAPI API, PostgreSQL repositories, storage, admin dashboard
 tracker_agent/      Cross-platform capture, counters, queue, tray, HTTP client
 tests/              Security, queue, persistence, and ingest regression tests
 agent.toml.example  Device-side configuration template
@@ -58,7 +58,8 @@ PLAN.md             Product, privacy, security, and rollout plan
 
 ## 1. Run the server locally
 
-Python 3.11 or later is required. In PowerShell:
+Python 3.11 or later and PostgreSQL 15 or later are required. Create an empty
+`dayfinch` database and a least-privilege login, then in PowerShell:
 
 ```powershell
 cd dayfinch
@@ -70,6 +71,7 @@ pip install -e ".[dev]"
 $env:TRACKER_ADMIN_PASSWORD = "use-a-long-random-password"
 $env:TRACKER_ADMIN_EMAIL = "admin@your-company.com"
 $env:TRACKER_SESSION_SECRET = "use-at-least-32-random-characters"
+$env:TRACKER_DATABASE_URL = "postgresql://dayfinch:database-password@127.0.0.1:5432/dayfinch"
 uvicorn tracker_server.main:app --host 127.0.0.1 --port 8000
 ```
 
@@ -79,7 +81,8 @@ address and privately share the generated link. The app does not send email in
 this MVP. After accepting the link and setting a password, that person can enroll
 their own device, view only their captures, and delete any full 10-minute interval.
 
-For Docker, create `.env` from `.env.example`, replace both secrets, then run:
+For Docker, create `.env` from `.env.example`, replace the application and
+database secrets, then run:
 
 ```powershell
 docker compose up --build
@@ -147,7 +150,10 @@ dayfinch-agent --config ./agent.toml --no-tray
 | `TRACKER_ADMIN_PASSWORD` | development-only value | Admin dashboard password |
 | `TRACKER_ADMIN_EMAIL` | `admin@example.local` | Bootstrap administrator login email |
 | `TRACKER_SESSION_SECRET` | development-only value | Signs admin session cookies |
-| `TRACKER_DATA_DIR` | `./runtime` | SQLite DB and private screenshot directory |
+| `TRACKER_DATA_DIR` | `./runtime` | Private local screenshot directory |
+| `TRACKER_DATABASE_URL` | local PostgreSQL URL | Required PostgreSQL connection URL |
+| `TRACKER_DATABASE_MIN_POOL_SIZE` | `1` | Minimum server database connections |
+| `TRACKER_DATABASE_MAX_POOL_SIZE` | `10` | Maximum server database connections |
 | `TRACKER_COOKIE_SECURE` | `false` | Set `true` behind HTTPS |
 | `TRACKER_MAX_UPLOAD_MB` | `15` | Maximum screenshot upload |
 | `TRACKER_RETENTION_DAYS` | `30` | Automatic screenshot/record retention |

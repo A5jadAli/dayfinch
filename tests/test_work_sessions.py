@@ -9,9 +9,7 @@ def _setup(database: Database):
     return admin, project, task, database.authenticate_device(token)
 
 
-def test_heartbeat_state_creates_pauses_resumes_and_stops_session(tmp_path):
-    database = Database(tmp_path / "db.sqlite3")
-    database.initialize()
+def test_heartbeat_state_creates_pauses_resumes_and_stops_session(database: Database):
     _, _, task, device = _setup(database)
 
     active = database.sync_work_session(device, "active", task["id"])
@@ -26,16 +24,14 @@ def test_heartbeat_state_creates_pauses_resumes_and_stops_session(tmp_path):
     assert database.get_work_session(active["id"])["status"] == "stopped"
     with database.connect() as connection:
         segments = connection.execute(
-            "SELECT * FROM work_session_segments WHERE session_id = ?",
+            "SELECT * FROM work_session_segments WHERE session_id = %s",
             (active["id"],),
         ).fetchall()
     assert len(segments) == 2
     assert all(segment["ended_at"] for segment in segments)
 
 
-def test_changing_task_stops_old_session_and_preserves_capture_attribution(tmp_path):
-    database = Database(tmp_path / "db.sqlite3")
-    database.initialize()
+def test_changing_task_stops_old_session_and_preserves_capture_attribution(database: Database):
     admin, project, first_task, device = _setup(database)
     second_task = database.create_task(
         project["id"], "Run tests", "", admin["id"]
@@ -70,9 +66,7 @@ def test_changing_task_stops_old_session_and_preserves_capture_attribution(tmp_p
     assert record["session_id"] == second["id"]
 
 
-def test_task_from_another_project_is_rejected(tmp_path):
-    database = Database(tmp_path / "db.sqlite3")
-    database.initialize()
+def test_task_from_another_project_is_rejected(database: Database):
     admin, _, _, device = _setup(database)
     other = database.create_project("Beta", "", admin["id"])
     task = database.create_task(other["id"], "Wrong project", "", admin["id"])

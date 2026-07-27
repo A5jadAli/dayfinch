@@ -18,7 +18,7 @@ class AuditRepository(RepositoryMixin):
             connection.execute(
                 """INSERT INTO audit_events(
                        id, actor_user_id, action, target_type, target_id, occurred_at, details
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                   ) VALUES (%s, %s, %s, %s, %s, %s, %s)""",
                 (
                     str(uuid.uuid4()),
                     actor_user_id,

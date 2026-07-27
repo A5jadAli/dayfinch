@@ -5,8 +5,8 @@
 - `main.py` is the composition root. It creates infrastructure, middleware,
   background services, and route modules; it contains no product workflows.
 - `routers/` owns HTTP validation and response rendering by domain.
-- `repositories/` owns SQL by domain. `Database` remains a small compatibility
-  facade and connection/transaction owner.
+- `repositories/` owns PostgreSQL SQL by domain. `Database` remains a small
+  compatibility facade and bounded connection-pool/transaction owner.
 - `services/` coordinates workflows that cross persistence and external systems.
 - `migrations.py` contains ordered, idempotent schema changes recorded in
   `schema_migrations`.
@@ -38,6 +38,6 @@
 
 - Add a `TimesheetService` for submission, corrections, locking, and approval.
 - Split agent scheduling/session coordination from tray presentation.
-- Replace SQLite with PostgreSQL repositories for production deployments.
+- Add migration locking and PostgreSQL backup/restore drills for production.
 - Stream large objects and move exports/retention to a dedicated worker process.
 - Add structured telemetry, dependency locking, CI quality gates, and load tests.

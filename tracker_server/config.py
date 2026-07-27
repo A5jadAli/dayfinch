@@ -18,6 +18,9 @@ class Settings:
     max_upload_bytes: int
     retention_days: int
     admin_email: str = "admin@example.local"
+    database_url: str = "postgresql://dayfinch:dayfinch@127.0.0.1:5432/dayfinch"
+    database_min_pool_size: int = 1
+    database_max_pool_size: int = 10
     invitation_hours: int = 168
     storage_backend: str = "local"
     s3_bucket: str = ""
@@ -45,6 +48,16 @@ class Settings:
             admin_email=os.getenv("TRACKER_ADMIN_EMAIL", "admin@example.local")
             .strip()
             .lower(),
+            database_url=os.getenv(
+                "TRACKER_DATABASE_URL",
+                "postgresql://dayfinch:dayfinch@127.0.0.1:5432/dayfinch",
+            ).strip(),
+            database_min_pool_size=max(
+                1, int(os.getenv("TRACKER_DATABASE_MIN_POOL_SIZE", "1"))
+            ),
+            database_max_pool_size=max(
+                1, int(os.getenv("TRACKER_DATABASE_MAX_POOL_SIZE", "10"))
+            ),
             invitation_hours=max(1, int(os.getenv("TRACKER_INVITATION_HOURS", "168"))),
             storage_backend=os.getenv("TRACKER_STORAGE_BACKEND", "local").strip().lower(),
             s3_bucket=os.getenv("TRACKER_S3_BUCKET", "").strip(),
@@ -58,14 +71,16 @@ class Settings:
         )
 
     @property
-    def database_path(self) -> Path:
-        return self.data_dir / "tracker.sqlite3"
-
-    @property
     def screenshot_dir(self) -> Path:
         return self.data_dir / "screenshots"
 
     def prepare(self) -> None:
+        if not self.database_url.startswith(("postgresql://", "postgres://")):
+            raise RuntimeError("TRACKER_DATABASE_URL must be a PostgreSQL URL")
+        if self.database_max_pool_size < self.database_min_pool_size:
+            raise RuntimeError(
+                "TRACKER_DATABASE_MAX_POOL_SIZE must be at least the minimum"
+            )
         self.data_dir.mkdir(parents=True, exist_ok=True)
         if self.storage_backend == "local":
             self.screenshot_dir.mkdir(parents=True, exist_ok=True)

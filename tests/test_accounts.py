@@ -13,7 +13,7 @@ def _csrf(response) -> str:
     return match.group(1)
 
 
-def _settings(tmp_path) -> Settings:
+def _settings(tmp_path, postgres_url) -> Settings:
     return Settings(
         data_dir=tmp_path,
         admin_password="correct horse battery staple",
@@ -22,11 +22,12 @@ def _settings(tmp_path) -> Settings:
         max_upload_bytes=1024 * 1024,
         retention_days=30,
         admin_email="admin@example.test",
+        database_url=postgres_url,
     )
 
 
-def test_invitation_is_one_time_and_creates_member(tmp_path):
-    settings = _settings(tmp_path)
+def test_invitation_is_one_time_and_creates_member(tmp_path, postgres_url):
+    settings = _settings(tmp_path, postgres_url)
     app = create_app(settings)
     with TestClient(app):
         database = app.state.database
@@ -49,8 +50,8 @@ def test_invitation_is_one_time_and_creates_member(tmp_path):
         assert database.accept_invitation(token, password_hash) is None
 
 
-def test_member_can_delete_own_interval_but_cannot_invite(tmp_path):
-    settings = _settings(tmp_path)
+def test_member_can_delete_own_interval_but_cannot_invite(tmp_path, postgres_url):
+    settings = _settings(tmp_path, postgres_url)
     app = create_app(settings)
     with TestClient(app) as client:
         database = app.state.database
@@ -116,8 +117,8 @@ def test_member_can_delete_own_interval_but_cannot_invite(tmp_path):
         assert client.get(f"/screenshots/{payload['record_id']}").status_code == 404
 
 
-def test_admin_can_create_invitation_link(tmp_path):
-    settings = _settings(tmp_path)
+def test_admin_can_create_invitation_link(tmp_path, postgres_url):
+    settings = _settings(tmp_path, postgres_url)
     app = create_app(settings)
     with TestClient(app) as client:
         login_page = client.get("/login")

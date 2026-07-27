@@ -49,7 +49,7 @@ FastAPI service
   - administrator and invited-member session authentication
   - hashed device bearer tokens
   - upload validation and rate limits
-  - SQLite + local files for development; private S3-compatible storage supported
+  - PostgreSQL + local files for development; private S3-compatible storage supported
                 |
                 v
 Server-rendered administrator dashboard
@@ -58,8 +58,8 @@ Server-rendered administrator dashboard
   - enrollment, revocation, and full-interval deletion
 ```
 
-Production replaces SQLite/local files with PostgreSQL and private S3-compatible
-object storage. TLS terminates at a reverse proxy or managed ingress. Screenshot
+Production uses managed PostgreSQL and private S3-compatible object storage. TLS
+terminates at a reverse proxy or managed ingress. Screenshot
 objects are never public.
 
 ## 4. Delivery milestones

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import hashlib
-import sqlite3
 from contextlib import AbstractContextManager
 from datetime import datetime, timezone
+
+from psycopg import Connection
 
 
 def utc_now() -> str:
@@ -15,5 +16,5 @@ def token_hash(token: str) -> str:
 
 
 class RepositoryMixin:
-    def connect(self) -> AbstractContextManager[sqlite3.Connection]:
+    def connect(self) -> AbstractContextManager[Connection]:
         raise NotImplementedError

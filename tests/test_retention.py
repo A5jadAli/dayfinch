@@ -37,9 +37,7 @@ def _old_record(database: Database) -> str:
     return record_id
 
 
-def test_retention_deletes_storage_before_metadata(tmp_path):
-    database = Database(tmp_path / "db.sqlite3")
-    database.initialize()
+def test_retention_deletes_storage_before_metadata(database: Database):
     record_id = _old_record(database)
     storage = FakeStorage()
 
@@ -50,9 +48,7 @@ def test_retention_deletes_storage_before_metadata(tmp_path):
     assert database.get_record(record_id) is None
 
 
-def test_retention_preserves_metadata_when_storage_fails(tmp_path):
-    database = Database(tmp_path / "db.sqlite3")
-    database.initialize()
+def test_retention_preserves_metadata_when_storage_fails(database: Database):
     record_id = _old_record(database)
 
     with pytest.raises(OSError, match="storage unavailable"):

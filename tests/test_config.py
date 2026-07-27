@@ -3,6 +3,7 @@ from pathlib import Path
 import pytest
 
 from tracker_agent.config import AgentConfig
+from tracker_server.config import Settings
 
 
 TOKEN = "x" * 40
@@ -33,3 +34,17 @@ def test_plain_http_is_local_only():
 def test_capture_interval_has_safe_minimum():
     with pytest.raises(ValueError, match="capture_interval"):
         config(capture_interval_seconds=10).validate()
+
+
+def test_server_rejects_non_postgresql_database_url(tmp_path):
+    settings = Settings(
+        data_dir=tmp_path,
+        admin_password="correct horse battery staple",
+        session_secret="s" * 40,
+        cookie_secure=False,
+        max_upload_bytes=1024,
+        retention_days=30,
+        database_url="sqlite:///tracker.db",
+    )
+    with pytest.raises(RuntimeError, match="PostgreSQL"):
+        settings.prepare()

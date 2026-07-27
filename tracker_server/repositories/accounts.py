@@ -13,7 +13,7 @@ class AccountsRepository(RepositoryMixin):
         normalized = email.strip().lower()
         with self.connect() as connection:
             row = connection.execute(
-                "SELECT * FROM users WHERE email = ? COLLATE NOCASE", (normalized,)
+                "SELECT * FROM users WHERE lower(email) = lower(%s)", (normalized,)
             ).fetchone()
             if row and (row["role"] != "admin" or not row["enabled"]):
                 raise RuntimeError("TRACKER_ADMIN_EMAIL belongs to a non-admin account")
@@ -21,33 +21,33 @@ class AccountsRepository(RepositoryMixin):
                 user_id = str(uuid.uuid4())
                 connection.execute(
                     """INSERT INTO users(id, email, password_hash, role, enabled, created_at)
-                       VALUES (?, ?, ?, 'admin', 1, ?)""",
+                       VALUES (%s, %s, %s, 'admin', TRUE, %s)""",
                     (user_id, normalized, password_hash, utc_now()),
                 )
                 row = connection.execute(
-                    "SELECT * FROM users WHERE id = ?", (user_id,)
+                    "SELECT * FROM users WHERE id = %s", (user_id,)
                 ).fetchone()
             else:
                 connection.execute(
-                    "UPDATE users SET password_hash = ? WHERE id = ?",
+                    "UPDATE users SET password_hash = %s WHERE id = %s",
                     (password_hash, row["id"]),
                 )
                 row = connection.execute(
-                    "SELECT * FROM users WHERE id = ?", (row["id"],)
+                    "SELECT * FROM users WHERE id = %s", (row["id"],)
                 ).fetchone()
         return dict(row)
 
     def get_user(self, user_id: str) -> dict[str, Any] | None:
         with self.connect() as connection:
             row = connection.execute(
-                "SELECT * FROM users WHERE id = ? AND enabled = 1", (user_id,)
+                "SELECT * FROM users WHERE id = %s AND enabled = TRUE", (user_id,)
             ).fetchone()
         return dict(row) if row else None
 
     def get_user_by_email(self, email: str) -> dict[str, Any] | None:
         with self.connect() as connection:
             row = connection.execute(
-                "SELECT * FROM users WHERE email = ? COLLATE NOCASE AND enabled = 1",
+                "SELECT * FROM users WHERE lower(email) = lower(%s) AND enabled = TRUE",
                 (email.strip().lower(),),
             ).fetchone()
         return dict(row) if row else None
@@ -70,7 +70,7 @@ class AccountsRepository(RepositoryMixin):
         raw_token = secrets.token_urlsafe(32)
         with self.connect() as connection:
             user = connection.execute(
-                "SELECT * FROM users WHERE email = ? COLLATE NOCASE", (normalized,)
+                "SELECT * FROM users WHERE lower(email) = lower(%s)", (normalized,)
             ).fetchone()
             if user and user["password_hash"] and user["enabled"]:
                 raise ValueError("That email already has an active account")
@@ -78,13 +78,13 @@ class AccountsRepository(RepositoryMixin):
                 user_id = str(uuid.uuid4())
                 connection.execute(
                     """INSERT INTO users(id, email, role, enabled, created_at)
-                       VALUES (?, ?, 'member', 0, ?)""",
+                       VALUES (%s, %s, 'member', FALSE, %s)""",
                     (user_id, normalized, now.isoformat()),
                 )
             else:
                 user_id = user["id"]
             connection.execute(
-                "UPDATE invitations SET used_at = ? WHERE user_id = ? AND used_at IS NULL",
+                "UPDATE invitations SET used_at = %s WHERE user_id = %s AND used_at IS NULL",
                 (now.isoformat(), user_id),
             )
             invitation_id = str(uuid.uuid4())
@@ -92,7 +92,7 @@ class AccountsRepository(RepositoryMixin):
             connection.execute(
                 """INSERT INTO invitations(
                        id, user_id, token_hash, created_by_user_id, created_at, expires_at
-                   ) VALUES (?, ?, ?, ?, ?, ?)""",
+                   ) VALUES (%s, %s, %s, %s, %s, %s)""",
                 (
                     invitation_id,
                     user_id,
@@ -114,7 +114,7 @@ class AccountsRepository(RepositoryMixin):
             row = connection.execute(
                 """SELECT i.*, u.email FROM invitations i
                    JOIN users u ON u.id = i.user_id
-                   WHERE i.token_hash = ? AND i.used_at IS NULL AND i.expires_at > ?""",
+                   WHERE i.token_hash = %s AND i.used_at IS NULL AND i.expires_at > %s""",
                 (token_hash(raw_token), now),
             ).fetchone()
         return dict(row) if row else None
@@ -124,23 +124,23 @@ class AccountsRepository(RepositoryMixin):
     ) -> dict[str, Any] | None:
         now = utc_now()
         with self.connect() as connection:
-            connection.execute("BEGIN IMMEDIATE")
             invitation = connection.execute(
                 """SELECT * FROM invitations
-                   WHERE token_hash = ? AND used_at IS NULL AND expires_at > ?""",
+                   WHERE token_hash = %s AND used_at IS NULL AND expires_at > %s
+                   FOR UPDATE""",
                 (token_hash(raw_token), now),
             ).fetchone()
             if not invitation:
                 return None
             connection.execute(
-                "UPDATE users SET password_hash = ?, enabled = 1 WHERE id = ?",
+                "UPDATE users SET password_hash = %s, enabled = TRUE WHERE id = %s",
                 (password_hash, invitation["user_id"]),
             )
             connection.execute(
-                "UPDATE invitations SET used_at = ? WHERE id = ?",
+                "UPDATE invitations SET used_at = %s WHERE id = %s",
                 (now, invitation["id"]),
             )
             user = connection.execute(
-                "SELECT * FROM users WHERE id = ?", (invitation["user_id"],)
+                "SELECT * FROM users WHERE id = %s", (invitation["user_id"],)
             ).fetchone()
         return dict(user)

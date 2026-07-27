@@ -1,1 +1,1 @@
-"""SQLite repositories grouped by product domain."""
+"""PostgreSQL repositories grouped by product domain."""
