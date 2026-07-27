@@ -15,7 +15,7 @@ def postgres_url() -> str:
     with cleaner.connect() as connection:
         connection.execute(
             """TRUNCATE TABLE
-                   audit_events, activity_records, work_session_segments,
+                   audit_events, activity_records, timesheets, work_session_segments,
                    work_sessions, tasks, invitations, devices, project_members,
                    projects, users
                RESTART IDENTITY CASCADE"""

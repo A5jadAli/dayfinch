@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 from psycopg import Connection
@@ -65,6 +66,14 @@ class WorkRepository(RepositoryMixin):
     ) -> dict[str, Any] | None:
         if status not in {"active", "paused", "stopped"}:
             return None
+        if (
+            status == "active"
+            and device.get("owner_user_id")
+            and self.is_period_locked(
+                device["owner_user_id"], datetime.now(timezone.utc).date()
+            )
+        ):
+            raise ValueError("The current timesheet period is approved and locked")
         project_id = device.get("project_id")
         if task_id:
             task = self.get_task(task_id)

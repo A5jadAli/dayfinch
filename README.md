@@ -23,6 +23,8 @@ and organizational approval.
   to one project workspace.
 - Project tasks and automatic work sessions driven by agent active, paused, and
   stopped heartbeats, with pause time excluded from tracked duration.
+- Submitted timesheets with server-calculated tracked duration, administrator
+  approval/rejection, review notes, audit events, and approved-period locking.
 - Immutable project/task/session attribution on new captures for reliable history.
 - Owner-controlled deletion of an image and its complete 10-minute activity row.
 - One-time device enrollment tokens; only SHA-256 token hashes are stored.

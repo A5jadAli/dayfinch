@@ -36,7 +36,8 @@
 
 ## Next architecture steps
 
-- Add a `TimesheetService` for submission, corrections, locking, and approval.
+- Extend `TimesheetService` with correction requests and approved adjustment
+  calculations; submission, approval, rejection, and locking are implemented.
 - Split agent scheduling/session coordination from tray presentation.
 - Add migration locking and PostgreSQL backup/restore drills for production.
 - Stream large objects and move exports/retention to a dedicated worker process.

@@ -18,6 +18,7 @@ button,.button { border:0; border-radius:8px; padding:11px 16px; background:var(
 button:hover,.button:hover { background:var(--accent-dark); }
 .link-button { background:transparent; padding:6px; }
 .account-nav { display:flex; gap:14px; align-items:center; font-size:.82rem; }
+.account-nav a { color:white; }
 .danger { background:var(--danger); }
 .small { margin-top:8px; padding:7px 10px; font-size:.8rem; }
 .enroll-form { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }

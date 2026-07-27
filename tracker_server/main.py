@@ -17,8 +17,10 @@ from .routers.dashboard import router as dashboard_router
 from .routers.devices import router as devices_router
 from .routers.projects import router as projects_router
 from .routers.reports import router as reports_router
+from .routers.timesheets import router as timesheets_router
 from .security import hash_password
 from .services.retention import RetentionService, run_retention_worker
+from .services.timesheets import TimesheetService
 from .storage import create_storage
 from .web import WebSecurity
 
@@ -55,12 +57,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 pass
             database.close()
 
-    app = FastAPI(title="Dayfinch", version="0.3.0", lifespan=lifespan)
+    app = FastAPI(title="Dayfinch", version="0.4.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.database = database
     app.state.storage = storage
     app.state.retention = retention
     app.state.web = WebSecurity(database)
+    app.state.timesheets = TimesheetService(database)
     app.state.templates = Jinja2Templates(directory=PACKAGE_DIR / "templates")
     app.state.dummy_password_hash = hash_password("invalid-password-for-timing-only")
     app.add_middleware(
@@ -77,6 +80,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(projects_router)
     app.include_router(devices_router)
     app.include_router(reports_router)
+    app.include_router(timesheets_router)
     app.include_router(agent_api_router)
 
     @app.get("/health", tags=["operations"])

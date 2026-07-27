@@ -14,6 +14,7 @@ from .repositories.activity import ActivityRepository
 from .repositories.audit import AuditRepository
 from .repositories.devices import DevicesRepository
 from .repositories.projects import ProjectsRepository
+from .repositories.timesheets import TimesheetRepository
 from .repositories.work import WorkRepository
 
 
@@ -40,6 +41,7 @@ class Database(
     ActivityRepository,
     AuditRepository,
     WorkRepository,
+    TimesheetRepository,
 ):
     """PostgreSQL connection-pool owner and repository facade."""
 

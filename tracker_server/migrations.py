@@ -156,7 +156,37 @@ def _create_schema(connection: Connection) -> None:
     )
 
 
-MIGRATIONS = (Migration(1, "create_postgresql_schema", _create_schema),)
+def _create_timesheets(connection: Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS timesheets (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            period_start DATE NOT NULL,
+            period_end DATE NOT NULL,
+            status TEXT NOT NULL CHECK(status IN ('submitted', 'approved', 'rejected')),
+            submitted_at TIMESTAMPTZ NOT NULL,
+            reviewed_at TIMESTAMPTZ,
+            reviewed_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            review_note TEXT NOT NULL DEFAULT '',
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            CHECK(period_end >= period_start),
+            CHECK(period_end - period_start <= 31),
+            UNIQUE(user_id, period_start, period_end)
+        );
+        CREATE INDEX IF NOT EXISTS idx_timesheets_status_period
+        ON timesheets(status, period_start DESC, period_end DESC);
+        CREATE INDEX IF NOT EXISTS idx_timesheets_user_period
+        ON timesheets(user_id, period_start DESC, period_end DESC);
+        """
+    )
+
+
+MIGRATIONS = (
+    Migration(1, "create_postgresql_schema", _create_schema),
+    Migration(2, "create_timesheets", _create_timesheets),
+)
 
 
 def apply_migrations(connection: Connection) -> None:
