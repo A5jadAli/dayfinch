@@ -89,5 +89,7 @@ class WebSecurity:
             raise HTTPException(status_code=401, detail="Missing device bearer token")
         device = self.database.authenticate_device(token)
         if not device:
-            raise HTTPException(status_code=401, detail="Invalid or revoked device token")
+            raise HTTPException(
+                status_code=401, detail="Invalid or revoked device token"
+            )
         return device

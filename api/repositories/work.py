@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from psycopg import Connection
@@ -69,9 +69,7 @@ class WorkRepository(RepositoryMixin):
         if (
             status == "active"
             and device.get("owner_user_id")
-            and self.is_period_locked(
-                device["owner_user_id"], datetime.now(timezone.utc).date()
-            )
+            and self.is_period_locked(device["owner_user_id"], datetime.now(UTC).date())
         ):
             raise ValueError("The current timesheet period is approved and locked")
         project_id = device.get("project_id")
@@ -183,9 +181,7 @@ class WorkRepository(RepositoryMixin):
         )
 
     @staticmethod
-    def _close_segment(
-        connection: Connection, session_id: str, ended_at: str
-    ) -> None:
+    def _close_segment(connection: Connection, session_id: str, ended_at: str) -> None:
         connection.execute(
             """UPDATE work_session_segments SET ended_at = %s
                WHERE session_id = %s AND ended_at IS NULL""",

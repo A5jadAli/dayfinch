@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from ..database import Database
 from ..storage import ScreenshotStore
@@ -16,9 +16,7 @@ class RetentionService:
         self.retention_days = retention_days
 
     def purge_expired(self) -> int:
-        cutoff = (
-            datetime.now(timezone.utc) - timedelta(days=self.retention_days)
-        ).isoformat()
+        cutoff = (datetime.now(UTC) - timedelta(days=self.retention_days)).isoformat()
         deleted = 0
         while records := self.database.records_before(cutoff):
             for record in records:

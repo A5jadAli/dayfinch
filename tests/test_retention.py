@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -24,7 +24,7 @@ def _old_record(database: Database) -> str:
         {
             "id": record_id,
             "device_id": device["id"],
-            "captured_at": (datetime.now(timezone.utc) - timedelta(days=60)).isoformat(),
+            "captured_at": (datetime.now(UTC) - timedelta(days=60)).isoformat(),
             "keyboard_events": 0,
             "mouse_clicks": 0,
             "mouse_distance": 0,

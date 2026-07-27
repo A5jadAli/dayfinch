@@ -30,7 +30,9 @@ def test_agent_authentication_and_idempotent_upload(tmp_path, postgres_url):
         unauthenticated = client.post(
             "/api/v1/activity",
             data=payload,
-            files={"screenshot_file": ("capture.jpg", b"\xff\xd8\xfffake", "image/jpeg")},
+            files={
+                "screenshot_file": ("capture.jpg", b"\xff\xd8\xfffake", "image/jpeg")
+            },
         )
         assert unauthenticated.status_code == 401
 
@@ -39,13 +41,17 @@ def test_agent_authentication_and_idempotent_upload(tmp_path, postgres_url):
             "/api/v1/activity",
             headers=headers,
             data=payload,
-            files={"screenshot_file": ("capture.jpg", b"\xff\xd8\xfffake", "image/jpeg")},
+            files={
+                "screenshot_file": ("capture.jpg", b"\xff\xd8\xfffake", "image/jpeg")
+            },
         )
         duplicate = client.post(
             "/api/v1/activity",
             headers=headers,
             data=payload,
-            files={"screenshot_file": ("capture.jpg", b"\xff\xd8\xfffake", "image/jpeg")},
+            files={
+                "screenshot_file": ("capture.jpg", b"\xff\xd8\xfffake", "image/jpeg")
+            },
         )
         assert created.status_code == 201
         assert duplicate.json()["status"] == "duplicate"

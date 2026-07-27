@@ -3,7 +3,6 @@ import io
 
 from fastapi import APIRouter, HTTPException, Request, Response
 
-
 router = APIRouter(prefix="/reports", tags=["reports"])
 
 

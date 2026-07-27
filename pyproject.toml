@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dayfinch"
-version = "0.4.0"
+version = "0.5.0"
 description = "Consent-based screenshot and aggregate activity tracker"
 requires-python = ">=3.11"
 dependencies = [
@@ -20,6 +20,7 @@ dependencies = [
 
 [project.optional-dependencies]
 agent = [
+  "dbus-next>=0.2,<1; sys_platform == 'linux'",
   "httpx>=0.28,<1",
   "mss>=10,<11",
   "pillow>=11,<13",
@@ -31,6 +32,7 @@ dev = [
   "httpx>=0.28,<1",
   "pytest>=8,<10",
   "pytest-cov>=6,<8",
+  "ruff>=0.12,<1",
 ]
 package = ["pyinstaller>=6,<7"]
 s3 = ["boto3>=1.42,<2"]
@@ -48,3 +50,11 @@ ui = ["templates/*.html", "static/*.css"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+ignore = ["B008", "E501", "SIM105"]

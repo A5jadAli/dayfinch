@@ -31,11 +31,11 @@ def test_heartbeat_state_creates_pauses_resumes_and_stops_session(database: Data
     assert all(segment["ended_at"] for segment in segments)
 
 
-def test_changing_task_stops_old_session_and_preserves_capture_attribution(database: Database):
+def test_changing_task_stops_old_session_and_preserves_capture_attribution(
+    database: Database,
+):
     admin, project, first_task, device = _setup(database)
-    second_task = database.create_task(
-        project["id"], "Run tests", "", admin["id"]
-    )
+    second_task = database.create_task(project["id"], "Run tests", "", admin["id"])
     first = database.sync_work_session(device, "active", first_task["id"])
     second = database.sync_work_session(device, "active", second_task["id"])
 

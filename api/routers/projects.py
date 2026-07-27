@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-
 router = APIRouter(prefix="/projects", tags=["projects"])
 
 
@@ -56,8 +55,7 @@ def project_page(request: Request, project_id: str):
             available_users=[
                 candidate
                 for candidate in database.list_users()
-                if candidate["id"] not in member_ids
-                and candidate["role"] == "member"
+                if candidate["id"] not in member_ids and candidate["role"] == "member"
             ],
             tasks=database.list_tasks(project_id, include_archived=True),
             sessions=database.list_work_sessions(

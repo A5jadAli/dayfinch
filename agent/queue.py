@@ -3,11 +3,11 @@ from __future__ import annotations
 import os
 import sqlite3
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Iterator
 
 from .activity import ActivitySnapshot
 
@@ -76,11 +76,17 @@ class OfflineQueue:
             )
             columns = {row[1] for row in connection.execute("PRAGMA table_info(queue)")}
             if "focused_seconds" not in columns:
-                connection.execute("ALTER TABLE queue ADD COLUMN focused_seconds INTEGER NOT NULL DEFAULT 0")
+                connection.execute(
+                    "ALTER TABLE queue ADD COLUMN focused_seconds INTEGER NOT NULL DEFAULT 0"
+                )
             if "interactive_seconds" not in columns:
-                connection.execute("ALTER TABLE queue ADD COLUMN interactive_seconds INTEGER NOT NULL DEFAULT 0")
+                connection.execute(
+                    "ALTER TABLE queue ADD COLUMN interactive_seconds INTEGER NOT NULL DEFAULT 0"
+                )
             if "session_id" not in columns:
-                connection.execute("ALTER TABLE queue ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+                connection.execute(
+                    "ALTER TABLE queue ADD COLUMN session_id TEXT NOT NULL DEFAULT ''"
+                )
 
     def add(
         self,
@@ -91,7 +97,7 @@ class OfflineQueue:
         session_id: str = "",
     ) -> QueuedRecord:
         record_id = str(uuid.uuid4())
-        captured_at = captured_at or datetime.now(timezone.utc)
+        captured_at = captured_at or datetime.now(UTC)
         image_path = self.image_dir / f"{record_id}.jpg"
         temporary = image_path.with_suffix(".jpg.part")
         with temporary.open("wb") as stream:
@@ -129,7 +135,7 @@ class OfflineQueue:
                     record.session_id,
                     record.active_app,
                     record.screenshot_path,
-                    datetime.now(timezone.utc).isoformat(),
+                    datetime.now(UTC).isoformat(),
                 ),
             )
         self._trim()
@@ -172,6 +178,8 @@ class OfflineQueue:
                    LIMIT MAX((SELECT COUNT(*) FROM queue) - ?, 0)""",
                 (self.max_items,),
             ).fetchall()
-            connection.executemany("DELETE FROM queue WHERE id = ?", [(row["id"],) for row in excess])
+            connection.executemany(
+                "DELETE FROM queue WHERE id = ?", [(row["id"],) for row in excess]
+            )
         for row in excess:
             Path(row["screenshot_path"]).unlink(missing_ok=True)

@@ -9,7 +9,6 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from ..security import hash_password, verify_password
 from ..web import normalize_email
 
-
 router = APIRouter(tags=["authentication"])
 
 
@@ -66,9 +65,7 @@ def logout(request: Request, csrf: Annotated[str, Form()]):
     return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
 
 
-@router.get(
-    "/invite/{token}", response_class=HTMLResponse, name="accept_invite_page"
-)
+@router.get("/invite/{token}", response_class=HTMLResponse, name="accept_invite_page")
 def accept_invite_page(request: Request, token: str):
     invitation = request.app.state.database.get_invitation(token)
     return request.app.state.templates.TemplateResponse(
@@ -137,14 +134,10 @@ def create_invitation(
         return request.app.state.templates.TemplateResponse(
             request=request,
             name="invitation_created.html",
-            context=web.page_context(
-                request, error=str(exc), invitation=None
-            ),
+            context=web.page_context(request, error=str(exc), invitation=None),
             status_code=400,
         )
-    invitation["url"] = str(
-        request.url_for("accept_invite_page", token=raw_token)
-    )
+    invitation["url"] = str(request.url_for("accept_invite_page", token=raw_token))
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="invitation_created.html",

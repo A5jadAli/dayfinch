@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from .base import RepositoryMixin, token_hash, utc_now
@@ -66,7 +66,7 @@ class AccountsRepository(RepositoryMixin):
         self, email: str, created_by_user_id: str, valid_hours: int
     ) -> tuple[dict[str, Any], str]:
         normalized = email.strip().lower()
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         raw_token = secrets.token_urlsafe(32)
         with self.connect() as connection:
             user = connection.execute(

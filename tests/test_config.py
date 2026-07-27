@@ -5,7 +5,6 @@ import pytest
 from agent.config import AgentConfig
 from api.config import Settings
 
-
 TOKEN = "x" * 40
 
 

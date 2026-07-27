@@ -5,6 +5,7 @@ import logging
 import sys
 import threading
 import time
+from io import BytesIO
 from pathlib import Path
 
 import httpx
@@ -16,8 +17,8 @@ from .activity import ActivityMonitor
 from .capture import capture_screenshot
 from .client import TrackerClient
 from .config import AgentConfig
+from .diagnostics import format_diagnostics, has_failures, run_diagnostics
 from .queue import OfflineQueue
-
 
 LOGGER = logging.getLogger("dayfinch-agent")
 
@@ -49,7 +50,10 @@ class TrackerAgent:
             return self._status
 
     def start(self) -> None:
-        self.activity.start()
+        if not self.activity.start():
+            LOGGER.warning(
+                "Aggregate keyboard and mouse counts are unavailable on this desktop"
+            )
         self._worker = threading.Thread(
             target=self._work_loop, name="tracker-worker", daemon=True
         )
@@ -219,6 +223,16 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", type=Path, default=Path("agent.toml"))
     parser.add_argument(
+        "--diagnose",
+        action="store_true",
+        help="Check OS support and permissions, print results, and exit",
+    )
+    parser.add_argument(
+        "--capture-test",
+        action="store_true",
+        help="Capture one screenshot in memory to verify permission, then exit",
+    )
+    parser.add_argument(
         "--no-tray",
         action="store_true",
         help="Run visibly in this terminal (useful on Linux without a tray)",
@@ -232,6 +246,32 @@ def run() -> None:
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    checks = run_diagnostics()
+    if args.diagnose:
+        print(format_diagnostics(checks))
+        raise SystemExit(1 if has_failures(checks) else 0)
+    if has_failures(checks):
+        print(format_diagnostics(checks), file=sys.stderr)
+        print(
+            "Agent startup stopped because a required capability is unavailable.",
+            file=sys.stderr,
+        )
+        raise SystemExit(3)
+    if args.capture_test:
+        try:
+            screenshot = capture_screenshot(all_monitors=False, jpeg_quality=65)
+            with Image.open(BytesIO(screenshot)) as image:
+                image.verify()
+            print(
+                "Capture test passed; the screenshot was verified in memory and discarded."
+            )
+            return
+        except Exception as exc:
+            print(f"Capture test failed: {exc}", file=sys.stderr)
+            raise SystemExit(4) from exc
+    for check in checks:
+        if check.status == "warn":
+            LOGGER.warning("%s: %s", check.name, check.message)
     try:
         config = AgentConfig.from_file(args.config.resolve())
     except (OSError, ValueError) as exc:

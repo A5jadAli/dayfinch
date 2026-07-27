@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import hashlib
 from contextlib import AbstractContextManager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from psycopg import Connection
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def token_hash(token: str) -> str:

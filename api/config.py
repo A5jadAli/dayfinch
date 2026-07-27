@@ -30,7 +30,7 @@ class Settings:
     s3_kms_key_id: str = ""
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         data_dir = Path(os.getenv("TRACKER_DATA_DIR", "runtime")).resolve()
         return cls(
             data_dir=data_dir,
@@ -58,7 +58,9 @@ class Settings:
                 1, int(os.getenv("TRACKER_DATABASE_MAX_POOL_SIZE", "10"))
             ),
             invitation_hours=max(1, int(os.getenv("TRACKER_INVITATION_HOURS", "168"))),
-            storage_backend=os.getenv("TRACKER_STORAGE_BACKEND", "local").strip().lower(),
+            storage_backend=os.getenv("TRACKER_STORAGE_BACKEND", "local")
+            .strip()
+            .lower(),
             s3_bucket=os.getenv("TRACKER_S3_BUCKET", "").strip(),
             s3_region=os.getenv("TRACKER_S3_REGION", "us-east-1").strip(),
             s3_endpoint_url=os.getenv("TRACKER_S3_ENDPOINT_URL", "").strip(),

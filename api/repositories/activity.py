@@ -78,7 +78,9 @@ class ActivityRepository(RepositoryMixin):
 
     def delete_record(self, record_id: str) -> None:
         with self.connect() as connection:
-            connection.execute("DELETE FROM activity_records WHERE id = %s", (record_id,))
+            connection.execute(
+                "DELETE FROM activity_records WHERE id = %s", (record_id,)
+            )
 
     def activity_report(self, project_id: str | None = None) -> list[dict[str, Any]]:
         where = "WHERE a.project_id = %s" if project_id else ""

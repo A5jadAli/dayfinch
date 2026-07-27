@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-
 router = APIRouter(prefix="/timesheets", tags=["timesheets"])
 
 

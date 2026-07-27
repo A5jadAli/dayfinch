@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import ctypes
+import os
 import platform
 import subprocess
 
@@ -46,6 +47,9 @@ def _macos_app() -> str:
 
 
 def _linux_app() -> str:
+    if os.getenv("XDG_SESSION_TYPE", "").strip().lower() == "wayland":
+        desktop = os.getenv("XDG_CURRENT_DESKTOP", "Wayland").split(":", 1)[0]
+        return f"{desktop or 'Wayland'} desktop"[:160]
     result = subprocess.run(
         ["xdotool", "getactivewindow", "getwindowpid"],
         check=True,

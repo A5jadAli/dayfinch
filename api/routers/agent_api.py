@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, Uplo
 from ..schemas import Heartbeat
 from .dependencies import device_from_authorization
 
-
 router = APIRouter(prefix="/api/v1", tags=["agent"])
 
 
@@ -25,9 +24,7 @@ def heartbeat(
         session = database.sync_work_session(device, payload.status, payload.task_id)
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    database.touch_device(
-        device["id"], payload.platform, payload.status
-    )
+    database.touch_device(device["id"], payload.platform, payload.status)
     return {"status": "ok", "session_id": session["id"] if session else None}
 
 
@@ -56,7 +53,9 @@ async def ingest_activity(
         if captured.tzinfo is None:
             raise ValueError("timezone required")
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail="Invalid record id or timestamp") from exc
+        raise HTTPException(
+            status_code=422, detail="Invalid record id or timestamp"
+        ) from exc
 
     if database.record_exists(parsed_id):
         return {"status": "duplicate", "record_id": parsed_id}
@@ -91,7 +90,9 @@ async def ingest_activity(
             "focused_seconds": focused_seconds,
             "interactive_seconds": min(interactive_seconds, focused_seconds),
             "user_id": session["user_id"] if session else device.get("owner_user_id"),
-            "project_id": session["project_id"] if session else device.get("project_id"),
+            "project_id": session["project_id"]
+            if session
+            else device.get("project_id"),
             "task_id": session["task_id"] if session else None,
             "session_id": session["id"] if session else None,
         },

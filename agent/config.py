@@ -21,7 +21,7 @@ class AgentConfig:
     queue_dir: Path = Path("runtime/agent-queue")
 
     @classmethod
-    def from_file(cls, path: Path) -> "AgentConfig":
+    def from_file(cls, path: Path) -> AgentConfig:
         with path.open("rb") as stream:
             values = tomllib.load(stream)
         config = cls(
@@ -30,11 +30,15 @@ class AgentConfig:
             consent_confirmed=bool(values.get("consent_confirmed", False)),
             task_id=str(values.get("task_id", "")).strip(),
             capture_interval_seconds=int(values.get("capture_interval_seconds", 600)),
-            heartbeat_interval_seconds=int(values.get("heartbeat_interval_seconds", 60)),
+            heartbeat_interval_seconds=int(
+                values.get("heartbeat_interval_seconds", 60)
+            ),
             jpeg_quality=int(values.get("jpeg_quality", 65)),
             capture_all_monitors=bool(values.get("capture_all_monitors", True)),
             max_queue_items=int(values.get("max_queue_items", 500)),
-            queue_dir=(path.parent / values.get("queue_dir", "runtime/agent-queue")).resolve(),
+            queue_dir=(
+                path.parent / values.get("queue_dir", "runtime/agent-queue")
+            ).resolve(),
         )
         config.validate()
         return config
@@ -57,7 +61,9 @@ class AgentConfig:
 
                 uuid.UUID(self.task_id)
             except ValueError as exc:
-                raise ValueError("task_id must be a UUID from the project page") from exc
+                raise ValueError(
+                    "task_id must be a UUID from the project page"
+                ) from exc
         if not 60 <= self.capture_interval_seconds <= 86_400:
             raise ValueError("capture_interval_seconds must be between 60 and 86400")
         if not 15 <= self.heartbeat_interval_seconds <= 3_600:

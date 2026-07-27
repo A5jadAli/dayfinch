@@ -51,3 +51,10 @@ def test_unknown_apps_and_paused_gaps_are_not_counted():
     monitor.observe("Editor", now=205)
 
     assert monitor.snapshot_and_reset().focused_seconds == 5
+
+
+def test_wayland_skips_unsupported_global_input_listener(monkeypatch):
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setattr("agent.activity.platform.system", lambda: "Linux")
+
+    assert ActivityMonitor().start() is False

@@ -1,5 +1,5 @@
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from types import SimpleNamespace
 
 from api.config import Settings
@@ -49,7 +49,7 @@ def test_s3_storage_keeps_version_for_exact_deletion(tmp_path, monkeypatch):
     stored = storage.save(
         "device-id",
         "record-id",
-        datetime(2026, 7, 27, tzinfo=timezone.utc),
+        datetime(2026, 7, 27, tzinfo=UTC),
         b"\xff\xd8\xffimage",
     )
     assert stored.key == "device-id/2026/07/27/record-id.jpg"

@@ -24,7 +24,6 @@ from .services.timesheets import TimesheetService
 from .storage import create_storage
 from .web import WebSecurity
 
-
 PACKAGE_DIR = Path(__file__).resolve().parent
 UI_DIR = PACKAGE_DIR.parent / "ui"
 
@@ -58,7 +57,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 pass
             database.close()
 
-    app = FastAPI(title="Dayfinch", version="0.4.0", lifespan=lifespan)
+    app = FastAPI(title="Dayfinch", version="0.5.0", lifespan=lifespan)
     app.state.settings = settings
     app.state.database = database
     app.state.storage = storage

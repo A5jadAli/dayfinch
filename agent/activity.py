@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+import os
+import platform
 import threading
 import time
 from dataclasses import dataclass
@@ -18,7 +20,9 @@ class ActivitySnapshot:
 class ActivityMonitor:
     """Counts events only. It never stores the value of a pressed key."""
 
-    def __init__(self, *, idle_grace_seconds: float = 120.0, max_observation_gap: float = 15.0) -> None:
+    def __init__(
+        self, *, idle_grace_seconds: float = 120.0, max_observation_gap: float = 15.0
+    ) -> None:
         self._lock = threading.Lock()
         self._enabled = True
         self._keyboard_events = 0
@@ -34,8 +38,16 @@ class ActivityMonitor:
         self._keyboard_listener = None
         self._mouse_listener = None
 
-    def start(self) -> None:
-        from pynput import keyboard, mouse
+    def start(self) -> bool:
+        if (
+            platform.system() == "Linux"
+            and os.getenv("XDG_SESSION_TYPE", "").strip().lower() == "wayland"
+        ):
+            return False
+        try:
+            from pynput import keyboard, mouse
+        except Exception:
+            return False
 
         # Callback arguments are intentionally ignored. Only aggregate counts exist.
         self._keyboard_listener = keyboard.Listener(on_press=self._on_press)
@@ -43,8 +55,15 @@ class ActivityMonitor:
             on_move=self._on_move,
             on_click=self._on_click,
         )
-        self._keyboard_listener.start()
-        self._mouse_listener.start()
+        try:
+            self._keyboard_listener.start()
+            self._mouse_listener.start()
+        except Exception:
+            self.stop()
+            self._keyboard_listener = None
+            self._mouse_listener = None
+            return False
+        return True
 
     def stop(self) -> None:
         if self._keyboard_listener:
@@ -98,7 +117,10 @@ class ActivityMonitor:
             if not normalized or normalized == "unknown":
                 return
             self._focused_seconds += elapsed
-            if self._last_input_at is not None and observed_at - self._last_input_at <= self._idle_grace_seconds:
+            if (
+                self._last_input_at is not None
+                and observed_at - self._last_input_at <= self._idle_grace_seconds
+            ):
                 self._interactive_seconds += elapsed
 
     def _mark_input_unlocked(self) -> None:
@@ -124,7 +146,9 @@ class ActivityMonitor:
                 return
             self._mark_input_unlocked()
             if self._last_position is not None:
-                distance = math.hypot(x - self._last_position[0], y - self._last_position[1])
+                distance = math.hypot(
+                    x - self._last_position[0], y - self._last_position[1]
+                )
                 # Ignore display jumps and cap noise from unusual drivers.
                 if distance < 10_000:
                     self._mouse_distance += distance

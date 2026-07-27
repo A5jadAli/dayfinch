@@ -5,7 +5,6 @@ from dataclasses import dataclass
 
 from psycopg import Connection
 
-
 MigrationFn = Callable[[Connection], None]
 
 
@@ -202,7 +201,9 @@ def apply_migrations(connection: Connection) -> None:
     )
     applied = {
         row["version"]
-        for row in connection.execute("SELECT version FROM schema_migrations").fetchall()
+        for row in connection.execute(
+            "SELECT version FROM schema_migrations"
+        ).fetchall()
     }
     for migration in MIGRATIONS:
         if migration.version in applied:

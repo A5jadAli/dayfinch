@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import datetime
-from typing import Iterator
 from uuid import UUID
 
 from psycopg import Connection
@@ -45,7 +45,9 @@ class Database(
 ):
     """PostgreSQL connection-pool owner and repository facade."""
 
-    def __init__(self, database_url: str, *, min_pool_size: int = 1, max_pool_size: int = 10):
+    def __init__(
+        self, database_url: str, *, min_pool_size: int = 1, max_pool_size: int = 10
+    ):
         self.pool = ConnectionPool(
             conninfo=database_url,
             min_size=min_pool_size,
@@ -56,9 +58,8 @@ class Database(
 
     @contextmanager
     def connect(self) -> Iterator[Connection]:
-        with self.pool.connection() as connection:
-            with connection.transaction():
-                yield connection
+        with self.pool.connection() as connection, connection.transaction():
+            yield connection
 
     def initialize(self) -> None:
         self.pool.open(wait=True)

@@ -9,7 +9,6 @@ from typing import Protocol
 
 from .config import Settings
 
-
 ALLOWED_SIGNATURES = {
     b"\xff\xd8\xff": (".jpg", "image/jpeg"),
     b"\x89PNG\r\n\x1a\n": (".png", "image/png"),
@@ -110,7 +109,9 @@ class S3ScreenshotStorage:
         try:
             import boto3
         except ImportError as exc:
-            raise RuntimeError('Install S3 support with: pip install -e ".[s3]"') from exc
+            raise RuntimeError(
+                'Install S3 support with: pip install -e ".[s3]"'
+            ) from exc
         self.bucket = settings.s3_bucket
         self.sse = settings.s3_sse
         self.kms_key_id = settings.s3_kms_key_id

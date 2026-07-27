@@ -34,7 +34,9 @@ def test_activity_records_are_idempotent(database: Database):
     assert len(database.list_records(device["id"])) == 1
 
 
-def test_postgresql_schema_uses_native_types_and_versioned_migrations(database: Database):
+def test_postgresql_schema_uses_native_types_and_versioned_migrations(
+    database: Database,
+):
     with database.connect() as connection:
         apply_migrations(connection)
         applied = connection.execute(

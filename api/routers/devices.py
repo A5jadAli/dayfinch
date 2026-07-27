@@ -3,7 +3,6 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-
 router = APIRouter(tags=["devices"])
 
 

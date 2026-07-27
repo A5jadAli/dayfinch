@@ -90,6 +90,26 @@ Use `--no-tray` only for a visible terminal-based local test. Normal desktop use
 should keep the tray controls available. macOS requires Screen Recording and Input
 Monitoring permission; Wayland support depends on the compositor's capture portal.
 
+Check a device before enrollment or diagnose missing permissions with:
+
+```bash
+dayfinch-agent --diagnose
+dayfinch-agent --capture-test
+```
+
+The capture test keeps the image only in memory, verifies it, and immediately
+discards it. Run it interactively on each real target device before rollout.
+
+Windows, macOS, and Linux agent tests run in CI. The `Package desktop agent`
+workflow produces unsigned, portable binaries for all three systems when manually
+started or when a `v*` tag is pushed. Signing/notarization remains disabled until
+the corresponding certificates are stored as repository secrets.
+
+On Wayland, screenshots use the XDG desktop portal and remain subject to the
+desktop's consent UI. Wayland intentionally blocks passive global input and other
+applications' foreground details, so Dayfinch reports those limitations and uses
+session focus/time without fabricating keyboard or mouse activity.
+
 ## Configuration
 
 `.env.example` contains only the three values required by the local Compose stack.

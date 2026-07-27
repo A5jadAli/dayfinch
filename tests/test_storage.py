@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -10,7 +10,7 @@ def test_storage_accepts_images_and_confines_paths(tmp_path):
     stored = storage.save(
         "device-1",
         "record-1",
-        datetime.now(timezone.utc),
+        datetime.now(UTC),
         b"\xff\xd8\xfffake-jpeg",
     )
     assert storage.resolve(stored.key).read_bytes() == b"\xff\xd8\xfffake-jpeg"
@@ -22,6 +22,4 @@ def test_storage_accepts_images_and_confines_paths(tmp_path):
 def test_storage_rejects_non_images(tmp_path):
     storage = ScreenshotStorage(tmp_path / "screenshots")
     with pytest.raises(ValueError, match="JPEG or PNG"):
-        storage.save(
-            "device-1", "record-1", datetime.now(timezone.utc), b"not-an-image"
-        )
+        storage.save("device-1", "record-1", datetime.now(UTC), b"not-an-image")
