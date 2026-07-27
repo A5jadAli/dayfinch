@@ -19,6 +19,9 @@ class QueuedRecord:
     keyboard_events: int
     mouse_clicks: int
     mouse_distance: int
+    focused_seconds: int
+    interactive_seconds: int
+    session_id: str
     active_app: str
     screenshot_path: str
 
@@ -62,12 +65,22 @@ class OfflineQueue:
                     keyboard_events INTEGER NOT NULL,
                     mouse_clicks INTEGER NOT NULL,
                     mouse_distance INTEGER NOT NULL,
+                    focused_seconds INTEGER NOT NULL DEFAULT 0,
+                    interactive_seconds INTEGER NOT NULL DEFAULT 0,
+                    session_id TEXT NOT NULL DEFAULT '',
                     active_app TEXT NOT NULL,
                     screenshot_path TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 )
                 """
             )
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(queue)")}
+            if "focused_seconds" not in columns:
+                connection.execute("ALTER TABLE queue ADD COLUMN focused_seconds INTEGER NOT NULL DEFAULT 0")
+            if "interactive_seconds" not in columns:
+                connection.execute("ALTER TABLE queue ADD COLUMN interactive_seconds INTEGER NOT NULL DEFAULT 0")
+            if "session_id" not in columns:
+                connection.execute("ALTER TABLE queue ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
 
     def add(
         self,
@@ -75,6 +88,7 @@ class OfflineQueue:
         activity: ActivitySnapshot,
         active_app: str,
         captured_at: datetime | None = None,
+        session_id: str = "",
     ) -> QueuedRecord:
         record_id = str(uuid.uuid4())
         captured_at = captured_at or datetime.now(timezone.utc)
@@ -91,18 +105,28 @@ class OfflineQueue:
             keyboard_events=activity.keyboard_events,
             mouse_clicks=activity.mouse_clicks,
             mouse_distance=activity.mouse_distance,
+            focused_seconds=activity.focused_seconds,
+            interactive_seconds=activity.interactive_seconds,
+            session_id=session_id,
             active_app=active_app[:160],
             screenshot_path=str(image_path),
         )
         with self._connect() as connection:
             connection.execute(
-                """INSERT INTO queue VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO queue(
+                       id, captured_at, keyboard_events, mouse_clicks, mouse_distance,
+                       focused_seconds, interactive_seconds, session_id, active_app,
+                       screenshot_path, created_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     record.id,
                     record.captured_at,
                     record.keyboard_events,
                     record.mouse_clicks,
                     record.mouse_distance,
+                    record.focused_seconds,
+                    record.interactive_seconds,
+                    record.session_id,
                     record.active_app,
                     record.screenshot_path,
                     datetime.now(timezone.utc).isoformat(),
@@ -123,6 +147,9 @@ class OfflineQueue:
                 keyboard_events=row["keyboard_events"],
                 mouse_clicks=row["mouse_clicks"],
                 mouse_distance=row["mouse_distance"],
+                focused_seconds=row["focused_seconds"],
+                interactive_seconds=row["interactive_seconds"],
+                session_id=row["session_id"],
                 active_app=row["active_app"],
                 screenshot_path=row["screenshot_path"],
             )

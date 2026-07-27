@@ -4,6 +4,9 @@ device_token = "paste-the-one-time-enrollment-token-here"
 
 # The employee/device owner must review the disclosure and explicitly change this.
 consent_confirmed = false
+# Optional task UUID from the assigned project page. Leave empty for general
+# project time; changing it starts a new work session on the next heartbeat.
+task_id = ""
 
 capture_interval_seconds = 600
 heartbeat_interval_seconds = 60

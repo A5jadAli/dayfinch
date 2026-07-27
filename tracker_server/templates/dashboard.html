@@ -10,6 +10,10 @@
   <form method="post" action="/devices" class="enroll-form">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <input name="name" maxlength="100" placeholder="Laptop or workstation name" required>
+    <select name="project_id" required>
+      <option value="" disabled selected>Select project</option>
+      {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
+    </select>
     <button type="submit">Enroll my device</button>
   </form>
 </div>
@@ -17,11 +21,12 @@
 <section class="panel">
   {% if devices %}
   <div class="table-wrap"><table>
-    <thead><tr><th>Name</th>{% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}<th>Status</th><th>Platform</th><th>Last seen</th><th>Captures</th></tr></thead>
+    <thead><tr><th>Name</th><th>Project</th>{% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}<th>Status</th><th>Platform</th><th>Last seen</th><th>Captures</th></tr></thead>
     <tbody>
       {% for device in devices %}
       <tr>
         <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+        <td>{% if device.project_id %}<a href="/projects/{{ device.project_id }}">{{ device.project_name }}</a>{% else %}Unassigned{% endif %}</td>
         {% if current_user.role == 'admin' %}<td>{{ device.owner_email or 'Legacy / unassigned' }}</td>{% endif %}
         <td><span class="pill {{ 'ok' if device.enabled else 'off' }}">{{ device.last_status or ('enrolled' if device.enabled else 'revoked') }}</span></td>
         <td>{{ device.platform or '—' }}</td>
@@ -36,8 +41,30 @@
   {% endif %}
 </section>
 
+<section class="panel">
+  <p class="eyebrow">Separate workspaces</p>
+  <h2>Projects</h2>
+  {% if projects %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Project</th><th>Members</th><th>Devices</th><th>Captures</th></tr></thead>
+    <tbody>{% for project in projects %}<tr><td><a href="/projects/{{ project.id }}">{{ project.name }}</a></td><td>{{ project.member_count }}</td><td>{{ project.device_count }}</td><td>{{ project.record_count }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {% else %}<div class="empty"><p>No project has been assigned yet.</p></div>{% endif %}
+</section>
+
 {% if current_user.role == 'admin' %}
 <section class="admin-grid">
+  <div class="panel">
+    <p class="eyebrow">Admin only</p>
+    <h2>Create a project</h2>
+    <p><a class="button" href="/reports/activity.csv">Export activity report</a></p>
+    <form method="post" action="/projects" class="stack">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label>Name <input name="name" maxlength="100" required></label>
+      <label>Description <input name="description" maxlength="500" placeholder="Optional context"></label>
+      <button type="submit">Create project</button>
+    </form>
+  </div>
   <div class="panel">
     <p class="eyebrow">Admin only</p>
     <h2>Invite a person</h2>
@@ -52,8 +79,8 @@
     <p class="eyebrow">Accounts</p>
     <h2>Authorized people</h2>
     <div class="table-wrap"><table>
-      <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Devices</th></tr></thead>
-      <tbody>{% for user in users %}<tr><td>{{ user.email }}</td><td>{{ user.role }}</td><td>{{ 'Active' if user.enabled else 'Invitation pending' }}</td><td>{{ user.device_count }}</td></tr>{% endfor %}</tbody>
+      <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Projects</th><th>Devices</th></tr></thead>
+      <tbody>{% for user in users %}<tr><td>{{ user.email }}</td><td>{{ user.role }}</td><td>{{ 'Active' if user.enabled else 'Invitation pending' }}</td><td>{{ user.project_count }}</td><td>{{ user.device_count }}</td></tr>{% endfor %}</tbody>
     </table></div>
   </div>
 </section>

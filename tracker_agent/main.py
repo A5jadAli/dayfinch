@@ -34,6 +34,9 @@ class TrackerAgent:
         self._paused = False
         self._status = "Starting"
         self._worker: threading.Thread | None = None
+        self._active_app = "Unknown"
+        self._session_id = ""
+        self._heartbeat_event = threading.Event()
 
     @property
     def paused(self) -> bool:
@@ -70,6 +73,7 @@ class TrackerAgent:
             paused = self._paused
             self._status = "Paused by employee" if paused else "Active"
         self.activity.set_enabled(not paused)
+        self._heartbeat_event.set()
         LOGGER.info("Tracking %s", "paused" if paused else "resumed")
 
     def capture_now(self) -> None:
@@ -84,9 +88,15 @@ class TrackerAgent:
         next_capture = time.monotonic() + self.config.capture_interval_seconds
         next_heartbeat = 0.0
         next_upload = 0.0
+        next_observation = 0.0
         while not self.stop_event.is_set():
             now = time.monotonic()
-            if now >= next_heartbeat:
+            if not self.paused and now >= next_observation:
+                self._active_app = active_application()
+                self.activity.observe(self._active_app, now=now)
+                next_observation = now + 5.0
+            if now >= next_heartbeat or self._heartbeat_event.is_set():
+                self._heartbeat_event.clear()
                 self._send_heartbeat()
                 next_heartbeat = now + self.config.heartbeat_interval_seconds
 
@@ -109,7 +119,9 @@ class TrackerAgent:
                 jpeg_quality=self.config.jpeg_quality,
             )
             activity = self.activity.snapshot_and_reset()
-            self.queue.add(screenshot, activity, active_application())
+            self.queue.add(
+                screenshot, activity, self._active_app, session_id=self._session_id
+            )
             self._set_status(f"Queued ({self.queue.count()} pending)")
             LOGGER.info("Screenshot captured and queued")
         except Exception:
@@ -142,7 +154,9 @@ class TrackerAgent:
 
     def _send_heartbeat(self) -> None:
         try:
-            self.client.heartbeat("paused" if self.paused else "active")
+            self._session_id = self.client.heartbeat(
+                "paused" if self.paused else "active", self.config.task_id
+            )
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
                 self._set_status("Enrollment token revoked")

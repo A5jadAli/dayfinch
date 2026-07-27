@@ -18,12 +18,17 @@ class TrackerClient:
             follow_redirects=False,
         )
 
-    def heartbeat(self, status: str) -> None:
+    def heartbeat(self, status: str, task_id: str = "") -> str:
         response = self._client.post(
             "/api/v1/heartbeat",
-            json={"platform": platform.platform(), "status": status},
+            json={
+                "platform": platform.platform(),
+                "status": status,
+                "task_id": task_id or None,
+            },
         )
         response.raise_for_status()
+        return str(response.json().get("session_id") or "")
 
     def upload(self, record: QueuedRecord) -> None:
         path = Path(record.screenshot_path)

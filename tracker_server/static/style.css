@@ -13,7 +13,7 @@ h2 { margin-top:0; }
 .heading-row { display:flex; gap:24px; justify-content:space-between; align-items:end; margin-bottom:24px; }
 .stack { display:grid; gap:16px; }
 label { display:grid; gap:6px; font-weight:650; }
-input { min-height:42px; border:1px solid #bac5c0; border-radius:8px; padding:8px 11px; font:inherit; background:white; }
+input,select { min-height:42px; border:1px solid #bac5c0; border-radius:8px; padding:8px 11px; font:inherit; background:white; }
 button,.button { border:0; border-radius:8px; padding:11px 16px; background:var(--accent); color:white; font:inherit; font-weight:700; cursor:pointer; text-decoration:none; display:inline-block; }
 button:hover,.button:hover { background:var(--accent-dark); }
 .link-button { background:transparent; padding:6px; }
@@ -21,7 +21,7 @@ button:hover,.button:hover { background:var(--accent-dark); }
 .danger { background:var(--danger); }
 .small { margin-top:8px; padding:7px 10px; font-size:.8rem; }
 .enroll-form { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-.enroll-form input { min-width:260px; }
+.enroll-form input,.enroll-form select { min-width:220px; }
 .table-wrap { overflow-x:auto; }
 table { border-collapse:collapse; width:100%; }
 th,td { padding:14px 10px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
@@ -41,4 +41,4 @@ th { color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spac
 .capture-meta>span { color:var(--muted); }
 .metrics { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
 .metrics span { border-radius:999px; padding:3px 8px; background:#edf1ef; font-size:.78rem; }
-@media (max-width:720px) { .heading-row { align-items:stretch; flex-direction:column; } .enroll-form { justify-content:stretch; } .enroll-form input,.enroll-form button { width:100%; } .admin-grid { grid-template-columns:1fr; } .account-nav>span { display:none; } }
+@media (max-width:720px) { .heading-row { align-items:stretch; flex-direction:column; } .enroll-form { justify-content:stretch; } .enroll-form input,.enroll-form select,.enroll-form button { width:100%; } .admin-grid { grid-template-columns:1fr; } .account-nav>span { display:none; } }

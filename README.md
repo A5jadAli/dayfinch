@@ -19,18 +19,29 @@ and organizational approval.
 - Password-protected admin dashboard and private screenshot delivery.
 - Admin-only email invitations with one-time, expiring account links.
 - Member accounts limited to their own devices and captures.
+- Many-to-many project membership, with every enrolled device and screenshot bound
+  to one project workspace.
+- Project tasks and automatic work sessions driven by agent active, paused, and
+  stopped heartbeats, with pause time excluded from tracked duration.
+- Immutable project/task/session attribution on new captures for reliable history.
 - Owner-controlled deletion of an image and its complete 10-minute activity row.
 - One-time device enrollment tokens; only SHA-256 token hashes are stored.
 - Idempotent screenshot upload and automatic 30-day retention cleanup.
 - Private S3-compatible storage with exact version-aware object deletion.
 - 10-minute configurable screenshots of one monitor or the whole virtual desktop.
 - Aggregate key press, mouse click, and mouse movement counts—never key values.
+- Separate foreground-focus and recent-interaction time, so reading code or
+  reviewing AI/build output is visible without pretending it was keyboard input.
+- Versioned, idempotent database migrations and domain-separated API/repository
+  modules suitable for continued production development.
 - Foreground process/application name without the document or window title.
 - Visible tray menu with current status, pause/resume, capture-now, and quit.
 - Bounded SQLite offline queue that retries when the server becomes reachable.
 - HTTPS required by the agent except when connecting to localhost.
 
-This is a local-pilot build, not yet a multi-tenant Hubstaff replacement. Use
+This is a local-pilot build, not yet a full multi-tenant Hubstaff replacement. It
+does not yet include payroll, schedules, billing, exports, SSO/MFA, or native
+mobile agents. Use
 PostgreSQL, private S3-compatible storage, SSO/MFA, an admin audit log, signed
 installers, and an external security review before a production rollout.
 

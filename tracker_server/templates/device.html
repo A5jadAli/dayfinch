@@ -5,7 +5,7 @@
   <div>
     <p class="eyebrow">Device timeline</p>
     <h1>{{ device.name }}</h1>
-    <p>{{ device.owner_email or 'Legacy / unassigned' }} · {{ device.platform or 'Platform not reported' }} · Last seen {{ device.last_seen_at or 'never' }}</p>
+    <p>{{ device.owner_email or 'Legacy / unassigned' }} · {{ device.project_name or 'No project' }} · {{ device.platform or 'Platform not reported' }} · Last seen {{ device.last_seen_at or 'never' }}</p>
   </div>
   <form method="post" action="/devices/{{ device.id }}/enabled">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
@@ -22,7 +22,7 @@
     <div class="capture-meta">
       <strong>{{ record.captured_at }}</strong>
       <span>{{ record.active_app or 'Application not available' }}</span>
-      <div class="metrics"><span>{{ record.keyboard_events }} keys</span><span>{{ record.mouse_clicks }} clicks</span><span>{{ record.mouse_distance }} px moved</span></div>
+      <div class="metrics"><span>{{ record.focused_seconds }}s app focus</span><span>{{ record.interactive_seconds }}s recent interaction</span><span>{{ record.keyboard_events }} keys</span><span>{{ record.mouse_clicks }} clicks</span><span>{{ record.mouse_distance }} px moved</span></div>
       <form method="post" action="/screenshots/{{ record.id }}/delete" onsubmit="return confirm('Permanently delete this screenshot and its complete 10-minute activity interval?');">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
         <button class="danger small" type="submit">Delete this interval</button>

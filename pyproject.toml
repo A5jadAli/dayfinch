@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dayfinch"
-version = "0.2.0"
+version = "0.3.0"
 description = "Consent-based screenshot and aggregate activity tracker"
 requires-python = ">=3.11"
 dependencies = [

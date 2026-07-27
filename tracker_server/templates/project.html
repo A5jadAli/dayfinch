@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ project.name }} · Tracker{% endblock %}
+{% block content %}
+<div class="heading-row">
+  <div><p class="eyebrow">Project workspace</p><h1>{{ project.name }}</h1><p>{{ project.description or 'No description' }}</p></div>
+</div>
+<section class="panel">
+  <h2>Project devices and captures</h2>
+  {% if devices %}<div class="table-wrap"><table>
+    <thead><tr><th>Device</th><th>Owner</th><th>Status</th><th>Last seen</th><th>Captures</th></tr></thead>
+    <tbody>{% for device in devices %}<tr><td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td><td>{{ device.owner_email }}</td><td>{{ device.last_status or 'enrolled' }}</td><td>{{ device.last_seen_at or 'Never' }}</td><td>{{ device.record_count }}</td></tr>{% endfor %}</tbody>
+  </table></div>{% else %}<div class="empty"><p>No devices are enrolled for this project.</p></div>{% endif %}
+</section>
+<section class="panel">
+  <h2>Members</h2>
+  {% if members %}<div class="table-wrap"><table><thead><tr><th>Email</th><th>Status</th></tr></thead><tbody>{% for member in members %}<tr><td>{{ member.email }}</td><td>{{ 'Active' if member.enabled else 'Invitation pending' }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+  {% if current_user.role == 'admin' and available_users %}
+  <form method="post" action="/projects/{{ project.id }}/members" class="enroll-form">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <select name="user_id" required><option value="" disabled selected>Add a person</option>{% for user in available_users %}<option value="{{ user.id }}">{{ user.email }}</option>{% endfor %}</select>
+    <button type="submit">Add to project</button>
+  </form>
+  {% endif %}
+</section>
+<section class="panel">
+  <h2>Tasks</h2>
+  {% if tasks %}<div class="table-wrap"><table><thead><tr><th>Task</th><th>Status</th><th>Billing</th><th>Agent task ID</th></tr></thead><tbody>{% for task in tasks %}<tr><td>{{ task.name }}</td><td>{{ task.status }}</td><td>{{ 'Billable' if task.billable else 'Non-billable' }}</td><td><code>{{ task.id }}</code></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty"><p>No tasks yet. Tracking will be attributed to general project time.</p></div>{% endif %}
+  {% if current_user.role == 'admin' %}
+  <form method="post" action="/projects/{{ project.id }}/tasks" class="stack">
+    <input type="hidden" name="csrf" value="{{ csrf_token }}">
+    <label>Name <input name="name" maxlength="120" required></label>
+    <label>Description <input name="description" maxlength="500"></label>
+    <label><span>Billing</span><select name="billable"><option value="1">Billable</option><option value="0">Non-billable</option></select></label>
+    <button type="submit">Create task</button>
+  </form>
+  {% endif %}
+</section>
+<section class="panel">
+  <h2>Work sessions</h2>
+  {% if sessions %}<div class="table-wrap"><table><thead><tr><th>Started</th><th>Task</th><th>Status</th><th>Tracked</th></tr></thead><tbody>{% for session in sessions %}<tr><td>{{ session.started_at }}</td><td>{{ session.task_name or 'General project time' }}</td><td>{{ session.status }}</td><td>{{ session.tracked_seconds }} seconds</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty"><p>No work sessions recorded.</p></div>{% endif %}
+</section>
+{% endblock %}
