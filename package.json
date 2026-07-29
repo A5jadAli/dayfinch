@@ -1,0 +1,13 @@
+{
+  "name": "dayfinch-ui",
+  "private": true,
+  "description": "Build tooling for the server-rendered dashboard stylesheet.",
+  "scripts": {
+    "build:css": "tailwindcss -i ui/tailwind.css -o ui/static/app.css --minify",
+    "watch:css": "tailwindcss -i ui/tailwind.css -o ui/static/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.1.14",
+    "tailwindcss": "^4.1.14"
+  }
+}

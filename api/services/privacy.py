@@ -2,6 +2,13 @@ from urllib.parse import urlsplit
 
 
 def normalize_domain(value: str) -> str:
+    """Reduce any reported location to a bare hostname.
+
+    Deliberately duplicated in agent/website_bridge.py: the desktop agent ships
+    separately and must not import from the server package. Keep the two copies
+    identical, or the browser extension and the server will disagree about what
+    counts as a domain.
+    """
     candidate = value.strip().lower()
     if not candidate:
         return ""

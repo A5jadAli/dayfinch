@@ -1,39 +1,68 @@
 {% extends "base.html" %}
-{% block title %}{{ device.name }} · Tracker{% endblock %}
+{% block title %}{{ device.name }} · Dayfinch{% endblock %}
 {% block content %}
-<div class="heading-row">
+<div class="flex flex-wrap items-start justify-between gap-6">
   <div>
     <p class="eyebrow">Device timeline</p>
-    <h1>{{ device.name }}</h1>
-    <p>{{ device.owner_email or 'Legacy / unassigned' }} · {{ device.project_name or 'No project' }} · {{ device.platform or 'Platform not reported' }} · Last seen {{ device.last_seen_at or 'never' }}</p>
+    <h1 class="page-title mt-2">{{ device.name }}</h1>
+    <div class="muted mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span>{{ device.owner_email or 'Unassigned' }}</span>
+      <span class="text-slate-300">/</span>
+      <span>{{ device.project_name or 'No project' }}</span>
+      <span class="text-slate-300">/</span>
+      <span class="max-w-[22rem] truncate">{{ device.platform or 'Platform not reported' }}</span>
+    </div>
+    <p class="mt-1 text-sm text-slate-500">Last seen {{ (device.last_seen_at[:19] | replace('T', ' ')) if device.last_seen_at else 'never' }}</p>
   </div>
   <form method="post" action="/devices/{{ device.id }}/enabled">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <input type="hidden" name="enabled" value="{{ 0 if device.enabled else 1 }}">
-    <button class="{{ 'danger' if device.enabled else '' }}" type="submit">{{ 'Revoke token' if device.enabled else 'Enable device' }}</button>
+    <button class="btn {{ 'btn-danger' if device.enabled else 'btn-secondary' }}" type="submit">{{ 'Revoke token' if device.enabled else 'Enable device' }}</button>
   </form>
 </div>
-<div class="notice">Deleting a capture permanently removes its screenshot and the keyboard/mouse activity associated with that 10-minute interval.</div>
+
+<div class="notice mt-6">
+  Deleting a capture permanently removes its screenshot and the keyboard and mouse activity recorded for that
+  interval.
+</div>
+
 {% if records %}
-<div class="timeline">
+<div class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
   {% for record in records %}
-  <article class="capture-card">
-    <a href="/screenshots/{{ record.id }}" target="_blank" rel="noopener"><img loading="lazy" src="/screenshots/{{ record.id }}" alt="Screenshot captured {{ record.captured_at }}"></a>
-    <div class="capture-meta">
-      <strong>{{ record.captured_at }}</strong>
-      <span>{{ record.active_app or 'Application not available' }}</span>
-      {% if record.active_url %}<span>🌐 {{ record.active_url }}</span>{% endif %}
-      {% if record.automation_suspected %}<span class="badge-warn">⚠ Input anomaly — interaction metric excluded; review context</span>{% endif %}
-      <div class="metrics"><span>{{ record.focused_seconds }}s app focus</span><span>{{ record.interactive_seconds }}s recent interaction</span><span>{{ record.keyboard_events }} keys</span><span>{{ record.mouse_clicks }} clicks</span><span>{{ record.mouse_distance }} px moved</span></div>
-      <form method="post" action="/screenshots/{{ record.id }}/delete" onsubmit="return confirm('Permanently delete this screenshot and its complete 10-minute activity interval?');">
+  <article class="card overflow-hidden transition hover:border-slate-300">
+    <a href="/screenshots/{{ record.id }}" target="_blank" rel="noopener" class="block">
+      <img class="aspect-video w-full bg-slate-100 object-cover" loading="lazy" src="/screenshots/{{ record.id }}" alt="Screenshot captured {{ record.captured_at }}">
+    </a>
+    <div class="grid gap-2.5 p-4">
+      <div>
+        <p class="text-sm font-medium text-slate-900 tabular-nums">{{ (record.captured_at[:19] | replace('T', ' ')) if record.captured_at else '' }}</p>
+        <p class="mt-0.5 truncate text-sm text-slate-600">{{ record.active_app or 'Application not available' }}</p>
+        {% if record.active_url %}<p class="mt-0.5 truncate text-sm text-brand-700">{{ record.active_url }}</p>{% endif %}
+      </div>
+      {% if record.automation_suspected %}
+      <p class="badge badge-warn w-fit">Input anomaly: interaction excluded</p>
+      {% endif %}
+      <div class="flex flex-wrap gap-1.5 text-xs text-slate-600">
+        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.focused_seconds }}s focus</span>
+        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.interactive_seconds }}s interaction</span>
+        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.keyboard_events }} keys</span>
+        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.mouse_clicks }} clicks</span>
+        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.mouse_distance }} px</span>
+      </div>
+      <form method="post" action="/screenshots/{{ record.id }}/delete" onsubmit="return confirm('Permanently delete this screenshot and its complete activity interval?');">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
-        <button class="danger small" type="submit">Delete this interval</button>
+        <button class="btn btn-danger btn-sm" type="submit">Delete this interval</button>
       </form>
     </div>
   </article>
   {% endfor %}
 </div>
 {% else %}
-<section class="panel empty"><h2>No captures received</h2><p>Start the enrolled agent and keep this page private.</p></section>
+<section class="card mt-6">
+  <div class="empty">
+    <h2 class="section-title">No captures received</h2>
+    <p class="muted mt-1">Start the enrolled agent and keep this page private.</p>
+  </div>
+</section>
 {% endif %}
 {% endblock %}

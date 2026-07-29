@@ -1,88 +1,153 @@
 {% extends "base.html" %}
-{% block title %}Devices · Tracker{% endblock %}
+{% block title %}Devices · Dayfinch{% endblock %}
 {% block content %}
-<div class="heading-row">
+<div class="flex flex-wrap items-end justify-between gap-6">
   <div>
     <p class="eyebrow">{{ 'Administration' if current_user.role == 'admin' else 'Your workspace' }}</p>
-    <h1>Tracked devices</h1>
-    <p>{{ 'All enrolled devices are visible to administrators.' if current_user.role == 'admin' else 'Only devices enrolled under your account are shown.' }}</p>
+    <h1 class="page-title mt-2">Tracked devices</h1>
+    <p class="muted mt-1">{{ 'All enrolled devices are visible to administrators.' if current_user.role == 'admin' else 'Only devices enrolled under your account are shown.' }}</p>
   </div>
-  <form method="post" action="/devices" class="enroll-form">
+  <form method="post" action="/devices" class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <input name="name" maxlength="100" placeholder="Laptop or workstation name" required>
-    <select name="project_id" required>
+    <input class="input w-full sm:w-56" name="name" maxlength="100" placeholder="Laptop or workstation name" required>
+    <select class="input w-full sm:w-44" name="project_id" required>
       <option value="" disabled selected>Select project</option>
       {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
     </select>
-    <button type="submit">Enroll my device</button>
+    <button class="btn btn-primary w-full sm:w-auto" type="submit">Enroll device</button>
   </form>
 </div>
 
-<section class="panel">
+<section class="card mt-6">
   {% if devices %}
-  <div class="table-wrap"><table>
-    <thead><tr><th>Name</th><th>Project</th>{% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}<th>Status</th><th>Platform</th><th>Last seen</th><th>Captures</th></tr></thead>
-    <tbody>
-      {% for device in devices %}
-      <tr>
-        <td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td>
-        <td>{% if device.project_id %}<a href="/projects/{{ device.project_id }}">{{ device.project_name }}</a>{% else %}Unassigned{% endif %}</td>
-        {% if current_user.role == 'admin' %}<td>{{ device.owner_email or 'Legacy / unassigned' }}</td>{% endif %}
-        <td><span class="pill {{ 'ok' if device.enabled else 'off' }}">{{ device.last_status or ('enrolled' if device.enabled else 'revoked') }}</span></td>
-        <td>{{ device.platform or '—' }}</td>
-        <td>{{ device.last_seen_at or 'Never' }}</td>
-        <td>{{ device.record_count }}</td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table></div>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Project</th>
+          {% if current_user.role == 'admin' %}<th>Owner</th>{% endif %}
+          <th>Status</th>
+          <th>Platform</th>
+          <th>Last seen</th>
+          <th class="text-right">Captures</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for device in devices %}
+        <tr>
+          <td><a class="link" href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+          <td>{% if device.project_id %}<a class="link" href="/projects/{{ device.project_id }}">{{ device.project_name }}</a>{% else %}<span class="text-slate-400">Unassigned</span>{% endif %}</td>
+          {% if current_user.role == 'admin' %}<td>{{ device.owner_email or 'Unassigned' }}</td>{% endif %}
+          <td><span class="badge {{ 'badge-ok' if device.enabled else 'badge-off' }}">{{ device.last_status or ('enrolled' if device.enabled else 'revoked') }}</span></td>
+          <td class="max-w-[14rem] truncate text-slate-500" title="{{ device.platform or 'Not reported' }}">{{ device.platform or 'Not reported' }}</td>
+          <td class="text-slate-500 tabular-nums">{{ (device.last_seen_at[:19] | replace('T', ' ')) if device.last_seen_at else 'Never' }}</td>
+          <td class="text-right tabular-nums">{{ device.record_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
   {% else %}
-  <div class="empty"><h2>No devices yet</h2><p>Enroll a device to receive its one-time agent token.</p></div>
+  <div class="empty">
+    <h2 class="section-title">No devices yet</h2>
+    <p class="muted mt-1">Enroll a device to receive its one-time agent token.</p>
+  </div>
   {% endif %}
 </section>
 
-<section class="panel">
-  <p class="eyebrow">Separate workspaces</p>
-  <h2>Projects</h2>
+<section class="card mt-6">
+  <div class="card-header">
+    <div>
+      <p class="eyebrow">Separate workspaces</p>
+      <h2 class="section-title mt-1">Projects</h2>
+    </div>
+  </div>
   {% if projects %}
-  <div class="table-wrap"><table>
-    <thead><tr><th>Project</th><th>Members</th><th>Devices</th><th>Captures</th></tr></thead>
-    <tbody>{% for project in projects %}<tr><td><a href="/projects/{{ project.id }}">{{ project.name }}</a></td><td>{{ project.member_count }}</td><td>{{ project.device_count }}</td><td>{{ project.record_count }}</td></tr>{% endfor %}</tbody>
-  </table></div>
-  {% else %}<div class="empty"><p>No project has been assigned yet.</p></div>{% endif %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Project</th><th class="text-right">Members</th><th class="text-right">Devices</th><th class="text-right">Captures</th></tr>
+      </thead>
+      <tbody>
+        {% for project in projects %}
+        <tr>
+          <td><a class="link" href="/projects/{{ project.id }}">{{ project.name }}</a></td>
+          <td class="text-right tabular-nums">{{ project.member_count }}</td>
+          <td class="text-right tabular-nums">{{ project.device_count }}</td>
+          <td class="text-right tabular-nums">{{ project.record_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p class="muted">No project has been assigned yet.</p></div>
+  {% endif %}
 </section>
 
 {% if current_user.role == 'admin' %}
-<section class="admin-grid">
-  <div class="panel">
+<div class="mt-6 grid gap-6 lg:grid-cols-2">
+  <section class="card card-body">
     <p class="eyebrow">Admin only</p>
-    <h2>Create a project</h2>
-    <p><a class="button" href="/reports/activity.csv">Export activity report</a></p>
-    <form method="post" action="/projects" class="stack">
+    <h2 class="section-title mt-1">Create a project</h2>
+    <form method="post" action="/projects" class="mt-4 grid gap-4">
       <input type="hidden" name="csrf" value="{{ csrf_token }}">
-      <label>Name <input name="name" maxlength="100" required></label>
-      <label>Description <input name="description" maxlength="500" placeholder="Optional context"></label>
-      <button type="submit">Create project</button>
+      <label class="field">
+        <span class="field-label">Name</span>
+        <input class="input" name="name" maxlength="100" required>
+      </label>
+      <label class="field">
+        <span class="field-label">Description</span>
+        <input class="input" name="description" maxlength="500" placeholder="Optional context">
+      </label>
+      <div class="flex flex-wrap items-center gap-3">
+        <button class="btn btn-primary" type="submit">Create project</button>
+        <a class="btn btn-secondary" href="/reports/activity.csv">Export activity CSV</a>
+      </div>
     </form>
-  </div>
-  <div class="panel">
+  </section>
+
+  <section class="card card-body">
     <p class="eyebrow">Admin only</p>
-    <h2>Invite a person</h2>
-    <p>Add their email to create a one-time account link. You copy and share the link through your approved channel.</p>
-    <form method="post" action="/invitations" class="stack">
+    <h2 class="section-title mt-1">Invite a person</h2>
+    <p class="muted mt-1">Add their email to create a one-time account link, then share it through your approved channel.</p>
+    <form method="post" action="/invitations" class="mt-4 grid gap-4">
       <input type="hidden" name="csrf" value="{{ csrf_token }}">
-      <label>Email <input name="email" type="email" maxlength="254" placeholder="person@company.com" required></label>
-      <button type="submit">Create invitation link</button>
+      <label class="field">
+        <span class="field-label">Email</span>
+        <input class="input" name="email" type="email" maxlength="254" placeholder="person@company.com" required>
+      </label>
+      <div><button class="btn btn-primary" type="submit">Create invitation link</button></div>
     </form>
-  </div>
-  <div class="panel">
-    <p class="eyebrow">Accounts</p>
-    <h2>Authorized people</h2>
-    <div class="table-wrap"><table>
-      <thead><tr><th>Email</th><th>Role</th><th>Status</th><th>Projects</th><th>Devices</th></tr></thead>
-      <tbody>{% for user in users %}<tr><td>{{ user.email }}</td><td>{{ user.role }}</td><td>{{ 'Active' if user.enabled else 'Invitation pending' }}</td><td>{{ user.project_count }}</td><td>{{ user.device_count }}</td></tr>{% endfor %}</tbody>
-    </table></div>
-  </div>
-</section>
+  </section>
+
+  <section class="card lg:col-span-2">
+    <div class="card-header">
+      <div>
+        <p class="eyebrow">Accounts</p>
+        <h2 class="section-title mt-1">Authorized people</h2>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr><th>Email</th><th>Role</th><th>Status</th><th class="text-right">Projects</th><th class="text-right">Devices</th></tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td class="text-slate-900">{{ user.email }}</td>
+            <td><span class="badge badge-neutral">{{ user.role }}</span></td>
+            <td>{% if user.enabled %}<span class="badge badge-ok">Active</span>{% else %}<span class="badge badge-neutral">Invitation pending</span>{% endif %}</td>
+            <td class="text-right tabular-nums">{{ user.project_count }}</td>
+            <td class="text-right tabular-nums">{{ user.device_count }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
 {% endif %}
 {% endblock %}

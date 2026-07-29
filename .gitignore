@@ -11,3 +11,4 @@ dist/
 *.egg-info/
 runtime/
 agent.toml
+node_modules/

@@ -1,0 +1,169 @@
+/* Source stylesheet. Build the served file with:
+     npm run build:css
+   ui/static/app.css is committed so running the server needs no Node toolchain,
+   and the dashboard never loads anything from a third-party CDN. */
+@import "tailwindcss";
+
+@source "./templates/**/*.html";
+
+@theme {
+  --color-brand-50: #f0f7f4;
+  --color-brand-100: #dcece5;
+  --color-brand-200: #b9d9cd;
+  --color-brand-500: #1d8069;
+  --color-brand-600: #176b57;
+  --color-brand-700: #125848;
+  --color-brand-900: #102c27;
+
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+}
+
+@layer base {
+  /* Reserve the scrollbar gutter on both sides. Without this the centred page is
+     offset by the scrollbar on scrolling pages, and shifts sideways when moving
+     between a page that scrolls and one that does not. */
+  html {
+    scrollbar-gutter: stable both-edges;
+  }
+}
+
+/* A deliberately small component layer. The dashboard is dense and repetitive, so
+   naming these keeps the templates legible and the styling consistent. */
+@layer components {
+  /* min-w-0 defeats the grid/flex `min-width: auto` default. Without it a card
+     holding a wide table refuses to shrink and drags its siblings off screen. */
+  .card {
+    @apply min-w-0 rounded-lg border border-slate-200 bg-white;
+  }
+
+  .card-body {
+    @apply p-5 sm:p-6;
+  }
+
+  .card-header {
+    @apply flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4 sm:px-6;
+  }
+
+  .eyebrow {
+    @apply text-xs font-medium uppercase tracking-wider text-slate-500;
+  }
+
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight text-slate-900;
+  }
+
+  .section-title {
+    @apply text-base font-semibold text-slate-900;
+  }
+
+  .muted {
+    @apply text-sm text-slate-600;
+  }
+
+  .field {
+    @apply grid gap-1.5;
+  }
+
+  .field-label {
+    @apply text-sm font-medium text-slate-700;
+  }
+
+  .input {
+    @apply w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-xs transition placeholder:text-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 focus:outline-none;
+  }
+
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-3.5 py-2 text-sm font-medium transition focus-visible:ring-2 focus-visible:ring-brand-600/40 focus-visible:outline-none;
+  }
+
+  /* Variants compose with .btn in markup: class="btn btn-primary". */
+  .btn-primary {
+    @apply bg-brand-600 text-white shadow-xs hover:bg-brand-700;
+  }
+
+  .btn-secondary {
+    @apply border border-slate-300 bg-white text-slate-700 shadow-xs hover:bg-slate-50;
+  }
+
+  .btn-danger {
+    @apply border border-red-200 bg-white text-red-700 hover:bg-red-50;
+  }
+
+  .btn-sm {
+    @apply px-2.5 py-1.5 text-xs;
+  }
+
+  .table {
+    @apply w-full text-left text-sm;
+  }
+
+  .table th {
+    @apply border-b border-slate-200 px-3 py-2.5 text-xs font-medium tracking-wider whitespace-nowrap text-slate-500 uppercase;
+  }
+
+  .table td {
+    @apply border-b border-slate-100 px-3 py-3 align-middle whitespace-nowrap text-slate-700;
+  }
+
+  .table tbody tr:last-child td {
+    @apply border-b-0;
+  }
+
+  .table tbody tr {
+    @apply transition hover:bg-slate-50/70;
+  }
+
+  /* Line the outer columns up with the card header padding. */
+  .table th:first-child,
+  .table td:first-child {
+    @apply pl-5 sm:pl-6;
+  }
+
+  .table th:last-child,
+  .table td:last-child {
+    @apply pr-5 sm:pr-6;
+  }
+
+  .table-wrap {
+    @apply -mx-1 overflow-x-auto px-1;
+  }
+
+  .link {
+    @apply font-medium text-brand-700 underline-offset-2 hover:underline;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap;
+  }
+
+  /* Variants compose with .badge in markup: class="badge badge-ok". */
+  .badge-neutral {
+    @apply bg-slate-100 text-slate-700;
+  }
+
+  .badge-ok {
+    @apply bg-brand-50 text-brand-700;
+  }
+
+  .badge-off {
+    @apply bg-red-50 text-red-700;
+  }
+
+  .badge-warn {
+    @apply border border-amber-200 bg-amber-50 text-amber-800;
+  }
+
+  .notice {
+    @apply rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900;
+  }
+
+  .notice-error {
+    @apply rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800;
+  }
+
+  .empty {
+    @apply px-6 py-12 text-center;
+  }
+}

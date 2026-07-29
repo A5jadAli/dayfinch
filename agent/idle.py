@@ -67,7 +67,7 @@ def _macos_idle_seconds() -> float:
     return value
 
 
-def _linux_idle_seconds() -> float:
+def _linux_idle_seconds() -> float | None:
     """Use desktop idle services that remain available under Wayland.
 
     GNOME exposes milliseconds through Mutter. KDE and several other desktops

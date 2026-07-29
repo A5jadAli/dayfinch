@@ -9,7 +9,12 @@ from urllib.parse import urlsplit
 
 
 def normalize_domain(value: str) -> str:
-    """Return a hostname only; paths, credentials, fragments, and queries vanish."""
+    """Return a hostname only; paths, credentials, fragments, and queries vanish.
+
+    Deliberately duplicated in api/services/privacy.py: this agent ships separately
+    and must not import from the server package. Keep the two copies identical, or
+    the browser extension and the server will disagree about what counts as a domain.
+    """
     candidate = value.strip().lower()
     if not candidate:
         return ""
@@ -30,7 +35,13 @@ class WebsiteBridge:
     """Receives active-tab domains from a consented local browser extension."""
 
     def __init__(
-        self, token: str, port: int = 8765, *, max_age_seconds: float = 90.0
+        self,
+        token: str,
+        port: int = 8765,
+        *,
+        # Chrome clamps alarms to one minute in packed extensions, so reports can be
+        # 60s apart. Do not lower this below ~90s or a focused tab will read stale.
+        max_age_seconds: float = 90.0,
     ) -> None:
         self.token = token
         self.port = port

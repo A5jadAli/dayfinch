@@ -1,21 +1,35 @@
 {% extends "base.html" %}
-{% block title %}Accept invitation · Tracker{% endblock %}
+{% block title %}Accept invitation · Dayfinch{% endblock %}
 {% block content %}
-<section class="panel narrow">
-  <p class="eyebrow">Private invitation</p>
-  {% if invitation %}
-  <h1>Create your account</h1>
-  <p>This invitation is for <strong>{{ invitation.email }}</strong>. After signing in, you can enroll your device, view your captures, and delete any complete 10-minute interval.</p>
-  {% if error %}<p class="error">{{ error }}</p>{% endif %}
-  <form method="post" action="/invite/{{ token }}" class="stack">
-    <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <label>Password <input name="password" type="password" minlength="12" required></label>
-    <label>Confirm password <input name="password_confirm" type="password" minlength="12" required></label>
-    <button type="submit">Accept invitation</button>
-  </form>
-  {% else %}
-  <h1>Invitation unavailable</h1>
-  <p class="error">This link is invalid, expired, or has already been used. Ask the administrator for a new invitation.</p>
-  {% endif %}
+<section class="mx-auto max-w-md">
+  <div class="card card-body">
+    <p class="eyebrow">Private invitation</p>
+    {% if invitation %}
+    <h1 class="page-title mt-2">Create your account</h1>
+    <p class="muted mt-1">
+      This invitation is for <strong class="font-medium text-slate-900">{{ invitation.email }}</strong>.
+      After signing in you can enroll your device, view your captures, and delete any complete interval.
+    </p>
+    {% if error %}<p class="notice-error mt-5">{{ error }}</p>{% endif %}
+    <form method="post" action="/invite/{{ token }}" class="mt-6 grid gap-4">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <label class="field">
+        <span class="field-label">Password</span>
+        <input class="input" name="password" type="password" autocomplete="new-password" minlength="12" required>
+        <span class="text-xs text-slate-500">At least 12 characters.</span>
+      </label>
+      <label class="field">
+        <span class="field-label">Confirm password</span>
+        <input class="input" name="password_confirm" type="password" autocomplete="new-password" minlength="12" required>
+      </label>
+      <button class="btn btn-primary mt-1 w-full" type="submit">Accept invitation</button>
+    </form>
+    {% else %}
+    <h1 class="page-title mt-2">Invitation unavailable</h1>
+    <p class="notice-error mt-4">
+      This link is invalid, expired, or has already been used. Ask the administrator for a new invitation.
+    </p>
+    {% endif %}
+  </div>
 </section>
 {% endblock %}

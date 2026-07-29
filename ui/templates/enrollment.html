@@ -1,12 +1,19 @@
 {% extends "base.html" %}
-{% block title %}Enrollment token{% endblock %}
+{% block title %}Enrollment token · Dayfinch{% endblock %}
 {% block content %}
-<section class="panel narrow">
-  <p class="eyebrow">One-time credential</p>
-  <h1>{{ device.name }}</h1>
-  <p>Copy this token now. Only its hash is stored, so it cannot be shown again.</p>
-  <pre class="token">{{ raw_token }}</pre>
-  <p class="warning">Treat this token like a password. It enrolls this device under {{ current_user.email }} and must only be placed in that device's local agent configuration.</p>
-  <a class="button" href="/">Done</a>
+<section class="mx-auto max-w-xl">
+  <div class="card card-body">
+    <p class="eyebrow">One-time credential</p>
+    <h1 class="page-title mt-2">{{ device.name }}</h1>
+    <p class="muted mt-1">Copy this token now. Only its hash is stored, so it cannot be shown again.</p>
+    <pre class="mt-5 overflow-x-auto rounded-md border border-slate-200 bg-slate-50 px-4 py-3 font-mono text-sm break-all whitespace-pre-wrap text-slate-900">{{ raw_token }}</pre>
+    <p class="notice mt-4">
+      Treat this token like a password. It enrolls this device under {{ current_user.email }} and must only be
+      placed in that device's local agent configuration.
+    </p>
+    <div class="mt-6">
+      <a class="btn btn-primary" href="/">Done</a>
+    </div>
+  </div>
 </section>
 {% endblock %}

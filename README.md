@@ -61,6 +61,20 @@ docker compose logs -f dayfinch-server
 Stop the app with `docker compose down`. Add `-v` only when you intentionally want
 to delete all local PostgreSQL and screenshot data.
 
+## Dashboard styles
+
+The server-rendered templates are styled with Tailwind CSS. The compiled
+stylesheet `ui/static/app.css` is committed, so running the server, the tests, and
+CI needs no Node toolchain, and the dashboard never loads anything from a
+third-party CDN.
+
+Rebuild it after editing any template or `ui/tailwind.css`:
+
+```bash
+npm install
+npm run build:css     # or: npm run watch:css
+```
+
 ## Run the checks
 
 With the Compose PostgreSQL service running:
@@ -139,6 +153,11 @@ misconduct: a modified open-source client or a physical input device cannot be m
 tamper-proof on an employee-owned computer. Session time, focus, domain, aggregate
 input, screenshots, and anomaly signals are kept separate so an admin can review
 context instead of relying on a simplistic activity percentage.
+
+This check is unavailable on Wayland. The same restriction that blocks passive
+input monitoring also hides synthetic input, so a jiggler both resets the session
+idle timer and produces nothing for the detector to inspect. On those desktops the
+screenshots and the focus record remain the only evidence.
 
 Website domain: macOS reads the foreground browser with Automation permission.
 Linux and Windows use the WebExtension in `extensions/chromium` (Chrome/Edge 121+

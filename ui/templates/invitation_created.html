@@ -1,16 +1,24 @@
 {% extends "base.html" %}
-{% block title %}Invitation link · Tracker{% endblock %}
+{% block title %}Invitation link · Dayfinch{% endblock %}
 {% block content %}
-<section class="panel narrow">
-  <p class="eyebrow">Admin only</p>
-  {% if error %}
-  <h1>Invitation not created</h1><p class="error">{{ error }}</p>
-  {% else %}
-  <h1>Share this link</h1>
-  <p>The one-time invitation for <strong>{{ invitation.email }}</strong> expires at {{ invitation.expires_at }}. The raw token is not stored and this URL cannot be recovered later.</p>
-  <input class="share-link" value="{{ invitation.url }}" readonly aria-label="Invitation URL" onclick="this.select()">
-  <p class="warning">Share it only with the intended person through an approved private channel.</p>
-  {% endif %}
-  <a class="button" href="/">Back to dashboard</a>
+<section class="mx-auto max-w-xl">
+  <div class="card card-body">
+    <p class="eyebrow">Admin only</p>
+    {% if error %}
+    <h1 class="page-title mt-2">Invitation not created</h1>
+    <p class="notice-error mt-4">{{ error }}</p>
+    {% else %}
+    <h1 class="page-title mt-2">Share this link</h1>
+    <p class="muted mt-1">
+      The one-time invitation for <strong class="font-medium text-slate-900">{{ invitation.email }}</strong>
+      expires at {{ invitation.expires_at }}. The raw token is not stored and this URL cannot be recovered later.
+    </p>
+    <input class="input mt-5 font-mono text-xs" value="{{ invitation.url }}" readonly aria-label="Invitation URL" onclick="this.select()">
+    <p class="notice mt-4">Share it only with the intended person through an approved private channel.</p>
+    {% endif %}
+    <div class="mt-6">
+      <a class="btn btn-secondary" href="/">Back to dashboard</a>
+    </div>
+  </div>
 </section>
 {% endblock %}

@@ -1,42 +1,131 @@
 {% extends "base.html" %}
-{% block title %}{{ project.name }} · Tracker{% endblock %}
+{% block title %}{{ project.name }} · Dayfinch{% endblock %}
 {% block content %}
-<div class="heading-row">
-  <div><p class="eyebrow">Project workspace</p><h1>{{ project.name }}</h1><p>{{ project.description or 'No description' }}</p></div>
+<div>
+  <p class="eyebrow">Project workspace</p>
+  <h1 class="page-title mt-2">{{ project.name }}</h1>
+  <p class="muted mt-1">{{ project.description or 'No description' }}</p>
 </div>
-<section class="panel">
-  <h2>Project devices and captures</h2>
-  {% if devices %}<div class="table-wrap"><table>
-    <thead><tr><th>Device</th><th>Owner</th><th>Status</th><th>Last seen</th><th>Captures</th></tr></thead>
-    <tbody>{% for device in devices %}<tr><td><a href="/devices/{{ device.id }}">{{ device.name }}</a></td><td>{{ device.owner_email }}</td><td>{{ device.last_status or 'enrolled' }}</td><td>{{ device.last_seen_at or 'Never' }}</td><td>{{ device.record_count }}</td></tr>{% endfor %}</tbody>
-  </table></div>{% else %}<div class="empty"><p>No devices are enrolled for this project.</p></div>{% endif %}
+
+<section class="card mt-6">
+  <div class="card-header"><h2 class="section-title">Devices and captures</h2></div>
+  {% if devices %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr><th>Device</th><th>Owner</th><th>Status</th><th>Last seen</th><th class="text-right">Captures</th></tr>
+      </thead>
+      <tbody>
+        {% for device in devices %}
+        <tr>
+          <td><a class="link" href="/devices/{{ device.id }}">{{ device.name }}</a></td>
+          <td>{{ device.owner_email }}</td>
+          <td><span class="badge badge-neutral">{{ device.last_status or 'enrolled' }}</span></td>
+          <td class="text-slate-500 tabular-nums">{{ (device.last_seen_at[:19] | replace('T', ' ')) if device.last_seen_at else 'Never' }}</td>
+          <td class="text-right tabular-nums">{{ device.record_count }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p class="muted">No devices are enrolled for this project.</p></div>
+  {% endif %}
 </section>
-<section class="panel">
-  <h2>Members</h2>
-  {% if members %}<div class="table-wrap"><table><thead><tr><th>Email</th><th>Status</th></tr></thead><tbody>{% for member in members %}<tr><td>{{ member.email }}</td><td>{{ 'Active' if member.enabled else 'Invitation pending' }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+
+<section class="card mt-6">
+  <div class="card-header"><h2 class="section-title">Members</h2></div>
+  {% if members %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Email</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for member in members %}
+        <tr>
+          <td class="text-slate-900">{{ member.email }}</td>
+          <td>{% if member.enabled %}<span class="badge badge-ok">Active</span>{% else %}<span class="badge badge-neutral">Invitation pending</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
   {% if current_user.role == 'admin' and available_users %}
-  <form method="post" action="/projects/{{ project.id }}/members" class="enroll-form">
+  <form method="post" action="/projects/{{ project.id }}/members" class="flex flex-wrap items-center gap-2 border-t border-slate-200 px-5 py-4 sm:px-6">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <select name="user_id" required><option value="" disabled selected>Add a person</option>{% for user in available_users %}<option value="{{ user.id }}">{{ user.email }}</option>{% endfor %}</select>
-    <button type="submit">Add to project</button>
+    <select class="input w-full sm:w-64" name="user_id" required>
+      <option value="" disabled selected>Add a person</option>
+      {% for user in available_users %}<option value="{{ user.id }}">{{ user.email }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-primary w-full sm:w-auto" type="submit">Add to project</button>
   </form>
   {% endif %}
 </section>
-<section class="panel">
-  <h2>Tasks</h2>
-  {% if tasks %}<div class="table-wrap"><table><thead><tr><th>Task</th><th>Status</th><th>Billing</th><th>Agent task ID</th></tr></thead><tbody>{% for task in tasks %}<tr><td>{{ task.name }}</td><td>{{ task.status }}</td><td>{{ 'Billable' if task.billable else 'Non-billable' }}</td><td><code>{{ task.id }}</code></td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty"><p>No tasks yet. Tracking will be attributed to general project time.</p></div>{% endif %}
+
+<section class="card mt-6">
+  <div class="card-header"><h2 class="section-title">Tasks</h2></div>
+  {% if tasks %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Task</th><th>Status</th><th>Billing</th><th>Agent task ID</th></tr></thead>
+      <tbody>
+        {% for task in tasks %}
+        <tr>
+          <td class="text-slate-900">{{ task.name }}</td>
+          <td><span class="badge badge-neutral">{{ task.status }}</span></td>
+          <td>{{ 'Billable' if task.billable else 'Non-billable' }}</td>
+          <td><code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">{{ task.id }}</code></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p class="muted">No tasks yet. Tracking will be attributed to general project time.</p></div>
+  {% endif %}
   {% if current_user.role == 'admin' %}
-  <form method="post" action="/projects/{{ project.id }}/tasks" class="stack">
+  <form method="post" action="/projects/{{ project.id }}/tasks" class="grid gap-4 border-t border-slate-200 px-5 py-5 sm:grid-cols-3 sm:px-6">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <label>Name <input name="name" maxlength="120" required></label>
-    <label>Description <input name="description" maxlength="500"></label>
-    <label><span>Billing</span><select name="billable"><option value="1">Billable</option><option value="0">Non-billable</option></select></label>
-    <button type="submit">Create task</button>
+    <label class="field">
+      <span class="field-label">Name</span>
+      <input class="input" name="name" maxlength="120" required>
+    </label>
+    <label class="field">
+      <span class="field-label">Description</span>
+      <input class="input" name="description" maxlength="500">
+    </label>
+    <label class="field">
+      <span class="field-label">Billing</span>
+      <select class="input" name="billable">
+        <option value="1">Billable</option>
+        <option value="0">Non-billable</option>
+      </select>
+    </label>
+    <div class="sm:col-span-3"><button class="btn btn-primary" type="submit">Create task</button></div>
   </form>
   {% endif %}
 </section>
-<section class="panel">
-  <h2>Work sessions</h2>
-  {% if sessions %}<div class="table-wrap"><table><thead><tr><th>Started</th><th>Task</th><th>Status</th><th>Tracked</th></tr></thead><tbody>{% for session in sessions %}<tr><td>{{ session.started_at }}</td><td>{{ session.task_name or 'General project time' }}</td><td>{{ session.status }}</td><td>{{ session.tracked_seconds }} seconds</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty"><p>No work sessions recorded.</p></div>{% endif %}
+
+<section class="card mt-6">
+  <div class="card-header"><h2 class="section-title">Work sessions</h2></div>
+  {% if sessions %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead><tr><th>Started</th><th>Task</th><th>Status</th><th class="text-right">Tracked</th></tr></thead>
+      <tbody>
+        {% for session in sessions %}
+        <tr>
+          <td class="text-slate-500 tabular-nums">{{ (session.started_at[:19] | replace('T', ' ')) if session.started_at else '' }}</td>
+          <td class="text-slate-900">{{ session.task_name or 'General project time' }}</td>
+          <td><span class="badge {{ 'badge-ok' if session.status == 'active' else 'badge-neutral' }}">{{ session.status }}</span></td>
+          <td class="text-right tabular-nums">{{ session.tracked_seconds }}s</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><p class="muted">No work sessions recorded.</p></div>
+  {% endif %}
 </section>
 {% endblock %}

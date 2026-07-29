@@ -151,7 +151,7 @@ class TrackerAgent:
             # Closing at the last real input, rather than "now", removes the full
             # idle stretch that triggered the threshold.
             self._idle_deduction_seconds = round(idle)
-            self._set_status("Idle — time not counted")
+            self._set_status("Idle: time not counted")
             LOGGER.info("No input for %.0f min; tracked time paused", idle / 60)
             self._heartbeat_event.set()
         elif self._auto_idle and idle < timeout:
@@ -381,7 +381,7 @@ def run_tray(agent: TrackerAgent) -> None:
     icon = pystray.Icon(
         "dayfinch",
         _tray_image(),
-        "Dayfinch — visible and controllable",
+        "Dayfinch: visible and controllable",
         menu=pystray.Menu(
             pystray.MenuItem(status_label, None, enabled=False),
             pystray.MenuItem(pause_label, toggle),

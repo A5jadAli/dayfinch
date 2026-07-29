@@ -1,33 +1,73 @@
 {% extends "base.html" %}
 {% block title %}Timesheets · Dayfinch{% endblock %}
 {% block content %}
-<div class="heading-row">
-  <div><p class="eyebrow">Reviewable work time</p><h1>Timesheets</h1><p>Submit a completed period after stopping the desktop tracker. Approved periods are locked.</p></div>
-  <form method="post" action="/timesheets" class="enroll-form">
+<div class="flex flex-wrap items-end justify-between gap-6">
+  <div>
+    <p class="eyebrow">Reviewable work time</p>
+    <h1 class="page-title mt-2">Timesheets</h1>
+    <p class="muted mt-1">Submit a completed period after stopping the desktop tracker. Approved periods are locked.</p>
+  </div>
+  <form method="post" action="/timesheets" class="flex w-full flex-wrap items-end gap-2 sm:w-auto">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
-    <label>From <input type="date" name="period_start" required></label>
-    <label>Through <input type="date" name="period_end" required></label>
-    <button type="submit">Submit period</button>
+    <label class="field">
+      <span class="field-label">From</span>
+      <input class="input w-full sm:w-40" type="date" name="period_start" required>
+    </label>
+    <label class="field">
+      <span class="field-label">Through</span>
+      <input class="input w-full sm:w-40" type="date" name="period_end" required>
+    </label>
+    <button class="btn btn-primary w-full sm:w-auto" type="submit">Submit period</button>
   </form>
 </div>
-{% if error %}<div class="notice error">{{ error }}</div>{% endif %}
-<section class="panel">
-  {% if timesheets %}<div class="table-wrap"><table>
-    <thead><tr>{% if current_user.role == 'admin' %}<th>Member</th>{% endif %}<th>Period</th><th>Tracked</th><th>Status</th><th>Review</th></tr></thead>
-    <tbody>{% for sheet in timesheets %}<tr>
-      {% if current_user.role == 'admin' %}<td>{{ sheet.email }}</td>{% endif %}
-      <td>{{ sheet.period_start }} through {{ sheet.period_end }}</td>
-      <td>{{ sheet.tracked_seconds }} seconds</td>
-      <td><span class="pill {{ 'ok' if sheet.status == 'approved' else 'off' if sheet.status == 'rejected' else '' }}">{{ sheet.status }}</span>{% if sheet.review_note %}<br><small>{{ sheet.review_note }}</small>{% endif %}</td>
-      <td>{% if current_user.role == 'admin' and sheet.status == 'submitted' %}
-        <form method="post" action="/timesheets/{{ sheet.id }}/review" class="enroll-form">
-          <input type="hidden" name="csrf" value="{{ csrf_token }}">
-          <input name="note" maxlength="500" placeholder="Optional review note">
-          <button name="decision" value="approved" type="submit">Approve</button>
-          <button name="decision" value="rejected" class="danger" type="submit">Reject</button>
-        </form>
-      {% else %}—{% endif %}</td>
-    </tr>{% endfor %}</tbody>
-  </table></div>{% else %}<div class="empty"><h2>No timesheets yet</h2><p>Submit a completed period to begin the approval workflow.</p></div>{% endif %}
+
+{% if error %}<div class="notice-error mt-6">{{ error }}</div>{% endif %}
+
+<section class="card mt-6">
+  {% if timesheets %}
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          {% if current_user.role == 'admin' %}<th>Member</th>{% endif %}
+          <th>Period</th>
+          <th class="text-right">Tracked</th>
+          <th>Status</th>
+          <th>Review</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for sheet in timesheets %}
+        <tr>
+          {% if current_user.role == 'admin' %}<td class="text-slate-900">{{ sheet.email }}</td>{% endif %}
+          <td>{{ sheet.period_start }} to {{ sheet.period_end }}</td>
+          <td class="text-right tabular-nums">{{ sheet.tracked_seconds }}s</td>
+          <td>
+            <span class="badge {{ 'badge-ok' if sheet.status == 'approved' else 'badge-off' if sheet.status == 'rejected' else 'badge-neutral' }}">{{ sheet.status }}</span>
+            {% if sheet.review_note %}<div class="mt-1 max-w-xs text-xs whitespace-normal text-slate-500">{{ sheet.review_note }}</div>{% endif %}
+          </td>
+          <td>
+            {% if current_user.role == 'admin' and sheet.status == 'submitted' %}
+            <form method="post" action="/timesheets/{{ sheet.id }}/review" class="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="csrf" value="{{ csrf_token }}">
+              <input class="input w-48" name="note" maxlength="500" placeholder="Optional review note">
+              <button class="btn btn-primary btn-sm" name="decision" value="approved" type="submit">Approve</button>
+              <button class="btn btn-danger btn-sm" name="decision" value="rejected" type="submit">Reject</button>
+            </form>
+            {% else %}
+            <span class="text-slate-400">Not reviewed</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty">
+    <h2 class="section-title">No timesheets yet</h2>
+    <p class="muted mt-1">Submit a completed period to begin the approval workflow.</p>
+  </div>
+  {% endif %}
 </section>
 {% endblock %}
