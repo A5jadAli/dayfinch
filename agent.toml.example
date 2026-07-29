@@ -12,5 +12,21 @@ capture_interval_seconds = 600
 heartbeat_interval_seconds = 60
 jpeg_quality = 65
 capture_all_monitors = true
+
+# Longest screenshot edge in pixels. Captures are shrunk by a whole-number factor
+# before encoding, which keeps the agent light on older or busy machines and cuts
+# upload size sharply on 4K and multi-monitor desktops. Set 0 to keep full size.
+max_image_dimension = 1920
+
+# After this many seconds with no OS session input the current work segment is
+# backdated to the last input, so the whole idle stretch is removed. Set 0 to disable.
+idle_timeout_seconds = 1800
+
+# Record the domain (host only, never the full URL or page title) of the foreground
+# browser tab. Chromium on Linux/Windows uses the extension in extensions/chromium.
+collect_websites = true
+website_bridge_token = ""
+website_bridge_port = 8765
+
 max_queue_items = 500
 queue_dir = "./runtime/agent-queue"

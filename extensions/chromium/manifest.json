@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Dayfinch Active Website",
+  "version": "0.1.0",
+  "description": "Reports only the active tab domain to the local Dayfinch agent.",
+  "permissions": ["alarms", "storage", "tabs"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": {
+    "scripts": ["service-worker.js"],
+    "service_worker": "service-worker.js"
+  },
+  "options_page": "options.html"
+}

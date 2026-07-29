@@ -5,12 +5,14 @@ from pathlib import Path
 
 import httpx
 
-from .queue import QueuedRecord
+from .queue import QueuedRecord, StateEvent
 
 
 class TrackerClient:
     def __init__(self, server_url: str, device_token: str, agent_version: str):
         self.agent_version = agent_version
+        # Constant for the life of the process; rebuilding it per heartbeat is waste.
+        self._platform = platform.platform()
         self._client = httpx.Client(
             base_url=server_url,
             headers={"Authorization": f"Bearer {device_token}"},
@@ -18,13 +20,17 @@ class TrackerClient:
             follow_redirects=False,
         )
 
-    def heartbeat(self, status: str, task_id: str = "") -> str:
+    def heartbeat(self, event: StateEvent) -> str:
         response = self._client.post(
             "/api/v1/heartbeat",
             json={
-                "platform": platform.platform(),
-                "status": status,
-                "task_id": task_id or None,
+                "platform": self._platform,
+                "event_id": event.id,
+                "observed_at": event.observed_at,
+                "status": event.status,
+                "task_id": event.task_id or None,
+                "idle_seconds": event.idle_seconds,
+                "heartbeat_interval_seconds": event.heartbeat_interval_seconds,
             },
         )
         response.raise_for_status()

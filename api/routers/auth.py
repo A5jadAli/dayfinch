@@ -44,6 +44,11 @@ def login(
         user["password_hash"] if user else request.app.state.dummy_password_hash,
     )
     if not user or not valid:
+        # Failed sign-ins are recorded without an actor; the attempted address is
+        # the only detail, so a brute-force or credential-stuffing attempt is visible.
+        database.add_audit_event(
+            user["id"] if user else None, "auth.login_failed", "user", None, normalized
+        )
         return request.app.state.templates.TemplateResponse(
             request=request,
             name="login.html",
@@ -53,14 +58,20 @@ def login(
     request.session.clear()
     request.session["user_id"] = user["id"]
     request.session["csrf_token"] = secrets.token_urlsafe(24)
+    database.add_audit_event(
+        user["id"], "auth.login", "user", user["id"], user["email"]
+    )
     return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.post("/logout")
 def logout(request: Request, csrf: Annotated[str, Form()]):
     web = request.app.state.web
-    web.require_user(request)
+    user = web.require_user(request)
     web.require_csrf(request, csrf)
+    request.app.state.database.add_audit_event(
+        user["id"], "auth.logout", "user", user["id"], user["email"]
+    )
     request.session.clear()
     return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -109,6 +120,9 @@ def accept_invite(
     user = database.accept_invitation(token, hash_password(password))
     if not user:
         raise HTTPException(status_code=410, detail="Invitation is no longer valid")
+    database.add_audit_event(
+        user["id"], "invitation.accepted", "user", user["id"], user["email"]
+    )
     request.session.clear()
     request.session["user_id"] = user["id"]
     request.session["csrf_token"] = secrets.token_urlsafe(24)
@@ -137,6 +151,9 @@ def create_invitation(
             context=web.page_context(request, error=str(exc), invitation=None),
             status_code=400,
         )
+    database.add_audit_event(
+        admin["id"], "invitation.created", "invitation", invitation["id"], normalized
+    )
     invitation["url"] = str(request.url_for("accept_invite_page", token=raw_token))
     return request.app.state.templates.TemplateResponse(
         request=request,

@@ -22,6 +22,8 @@
     <div class="capture-meta">
       <strong>{{ record.captured_at }}</strong>
       <span>{{ record.active_app or 'Application not available' }}</span>
+      {% if record.active_url %}<span>🌐 {{ record.active_url }}</span>{% endif %}
+      {% if record.automation_suspected %}<span class="badge-warn">⚠ Input anomaly — interaction metric excluded; review context</span>{% endif %}
       <div class="metrics"><span>{{ record.focused_seconds }}s app focus</span><span>{{ record.interactive_seconds }}s recent interaction</span><span>{{ record.keyboard_events }} keys</span><span>{{ record.mouse_clicks }} clicks</span><span>{{ record.mouse_distance }} px moved</span></div>
       <form method="post" action="/screenshots/{{ record.id }}/delete" onsubmit="return confirm('Permanently delete this screenshot and its complete 10-minute activity interval?');">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">

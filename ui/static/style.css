@@ -42,4 +42,5 @@ th { color:var(--muted); font-size:.78rem; text-transform:uppercase; letter-spac
 .capture-meta>span { color:var(--muted); }
 .metrics { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
 .metrics span { border-radius:999px; padding:3px 8px; background:#edf1ef; font-size:.78rem; }
+.badge-warn { align-self:flex-start; border-radius:999px; padding:3px 10px; background:#fff7e8; border:1px solid #dec9a3; color:#6d5228; font-size:.78rem; font-weight:600; }
 @media (max-width:720px) { .heading-row { align-items:stretch; flex-direction:column; } .enroll-form { justify-content:stretch; } .enroll-form input,.enroll-form select,.enroll-form button { width:100%; } .admin-grid { grid-template-columns:1fr; } .account-nav>span { display:none; } }

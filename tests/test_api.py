@@ -37,6 +37,13 @@ def test_agent_authentication_and_idempotent_upload(tmp_path, postgres_url):
         assert unauthenticated.status_code == 401
 
         headers = {"Authorization": f"Bearer {token}"}
+        legacy_heartbeat = client.post(
+            "/api/v1/heartbeat",
+            headers=headers,
+            json={"platform": "Linux", "status": "active"},
+        )
+        assert legacy_heartbeat.status_code == 200
+
         created = client.post(
             "/api/v1/activity",
             headers=headers,

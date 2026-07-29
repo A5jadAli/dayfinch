@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dayfinch website bridge</title>
+    <style>
+      body { font: 16px system-ui, sans-serif; max-width: 620px; margin: 3rem auto; padding: 0 1rem; }
+      label { display: block; margin: 1rem 0 .35rem; }
+      input { box-sizing: border-box; width: 100%; padding: .65rem; }
+      button { margin-top: 1rem; padding: .65rem 1rem; }
+      #status { margin-left: .75rem; }
+    </style>
+  </head>
+  <body>
+    <h1>Dayfinch website bridge</h1>
+    <p>Only the active tab’s domain is sent to the Dayfinch agent on this computer. Paths, searches, page titles, and browser history are never sent.</p>
+    <label for="token">Bridge token from agent.toml</label>
+    <input id="token" type="password" autocomplete="off">
+    <label for="port">Local port</label>
+    <input id="port" type="number" min="1024" max="65535" value="8765">
+    <button id="save" type="button">Save</button><span id="status" role="status"></span>
+    <script src="options.js"></script>
+  </body>
+</html>

@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlparse
 
 import pytest
 
@@ -10,6 +11,12 @@ def postgres_url() -> str:
     value = os.getenv("TRACKER_TEST_DATABASE_URL")
     if not value:
         pytest.skip("TRACKER_TEST_DATABASE_URL is required for PostgreSQL tests")
+    database_name = urlparse(value).path.removeprefix("/")
+    if not database_name.endswith("_test"):
+        pytest.fail(
+            "Refusing to truncate a non-test database; "
+            "TRACKER_TEST_DATABASE_URL must end in _test"
+        )
     cleaner = Database(value, min_pool_size=1, max_pool_size=2)
     cleaner.initialize()
     with cleaner.connect() as connection:

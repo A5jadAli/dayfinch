@@ -27,6 +27,9 @@ def enroll_device(
             status_code=403, detail="Choose a project assigned to your account"
         )
     device, raw_token = database.create_device(name, user["id"], project_id)
+    database.add_audit_event(
+        user["id"], "device.enrolled", "device", device["id"], device["name"]
+    )
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="enrollment.html",

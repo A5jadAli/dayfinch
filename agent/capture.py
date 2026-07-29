@@ -23,13 +23,15 @@ def is_wayland() -> bool:
     )
 
 
-def capture_screenshot(*, all_monitors: bool, jpeg_quality: int) -> bytes:
+def capture_screenshot(
+    *, all_monitors: bool, jpeg_quality: int, max_dimension: int = 0
+) -> bytes:
     if is_wayland():
-        return _capture_wayland(jpeg_quality)
-    return _capture_mss(all_monitors, jpeg_quality)
+        return _capture_wayland(jpeg_quality, max_dimension)
+    return _capture_mss(all_monitors, jpeg_quality, max_dimension)
 
 
-def _capture_mss(all_monitors: bool, jpeg_quality: int) -> bytes:
+def _capture_mss(all_monitors: bool, jpeg_quality: int, max_dimension: int) -> bytes:
     try:
         import mss
 
@@ -45,15 +47,15 @@ def _capture_mss(all_monitors: bool, jpeg_quality: int) -> bytes:
         raise CaptureUnavailable(
             "Desktop capture failed; check screen-recording permission"
         ) from exc
-    return _as_jpeg(image, jpeg_quality)
+    return _as_jpeg(image, jpeg_quality, max_dimension)
 
 
-def _capture_wayland(jpeg_quality: int) -> bytes:
+def _capture_wayland(jpeg_quality: int, max_dimension: int) -> bytes:
     """Capture through the consent-aware XDG Screenshot portal."""
     try:
         screenshot_path = asyncio.run(_request_portal_screenshot())
         with Image.open(screenshot_path) as image:
-            screenshot = _as_jpeg(image.convert("RGB"), jpeg_quality)
+            screenshot = _as_jpeg(image.convert("RGB"), jpeg_quality, max_dimension)
     except CaptureUnavailable:
         raise
     except Exception as exc:
@@ -154,7 +156,24 @@ async def _request_portal_screenshot() -> Path:
         bus.disconnect()
 
 
-def _as_jpeg(image: Image.Image, jpeg_quality: int) -> bytes:
+def downscale(image: Image.Image, max_dimension: int) -> Image.Image:
+    """Shrink by a whole-number factor so captures stay cheap on modest hardware.
+
+    Box reduction costs a fraction of resampling and avoids holding a full 4K
+    RGB buffer through JPEG encoding, which is what makes the agent noticeable
+    on low-end machines.
+    """
+    if max_dimension <= 0:
+        return image
+    longest = max(image.size)
+    if longest <= max_dimension:
+        return image
+    factor = -(-longest // max_dimension)  # ceil, so the result fits the limit
+    return image.reduce(factor)
+
+
+def _as_jpeg(image: Image.Image, jpeg_quality: int, max_dimension: int = 0) -> bytes:
     output = BytesIO()
-    image.save(output, format="JPEG", quality=jpeg_quality, optimize=True)
+    # optimize=True costs roughly twice the CPU for a few percent of size.
+    downscale(image, max_dimension).save(output, format="JPEG", quality=jpeg_quality)
     return output.getvalue()

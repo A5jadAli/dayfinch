@@ -17,6 +17,11 @@ class AgentConfig:
     heartbeat_interval_seconds: int = 60
     jpeg_quality: int = 65
     capture_all_monitors: bool = True
+    max_image_dimension: int = 1920
+    idle_timeout_seconds: int = 1800
+    collect_websites: bool = True
+    website_bridge_token: str = ""
+    website_bridge_port: int = 8765
     max_queue_items: int = 500
     queue_dir: Path = Path("runtime/agent-queue")
 
@@ -35,6 +40,11 @@ class AgentConfig:
             ),
             jpeg_quality=int(values.get("jpeg_quality", 65)),
             capture_all_monitors=bool(values.get("capture_all_monitors", True)),
+            max_image_dimension=int(values.get("max_image_dimension", 1920)),
+            idle_timeout_seconds=int(values.get("idle_timeout_seconds", 1800)),
+            collect_websites=bool(values.get("collect_websites", True)),
+            website_bridge_token=str(values.get("website_bridge_token", "")).strip(),
+            website_bridge_port=int(values.get("website_bridge_port", 8765)),
             max_queue_items=int(values.get("max_queue_items", 500)),
             queue_dir=(
                 path.parent / values.get("queue_dir", "runtime/agent-queue")
@@ -72,6 +82,24 @@ class AgentConfig:
             raise ValueError("jpeg_quality must be between 30 and 90")
         if not 10 <= self.max_queue_items <= 10_000:
             raise ValueError("max_queue_items must be between 10 and 10000")
+        if (
+            self.max_image_dimension != 0
+            and not 640 <= self.max_image_dimension <= 7_680
+        ):
+            raise ValueError(
+                "max_image_dimension must be 0 (full size) or between 640 and 7680"
+            )
+        if (
+            self.idle_timeout_seconds != 0
+            and not 60 <= self.idle_timeout_seconds <= 86_400
+        ):
+            raise ValueError(
+                "idle_timeout_seconds must be 0 (disabled) or between 60 and 86400"
+            )
+        if self.website_bridge_token and len(self.website_bridge_token) < 32:
+            raise ValueError("website_bridge_token must contain at least 32 characters")
+        if not 1024 <= self.website_bridge_port <= 65_535:
+            raise ValueError("website_bridge_port must be between 1024 and 65535")
 
     @staticmethod
     def _is_loopback(hostname: str) -> bool:

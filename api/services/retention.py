@@ -25,6 +25,7 @@ class RetentionService:
                 )
                 self.database.delete_record(record["id"])
                 deleted += 1
+        self.database.delete_state_events_before(cutoff)
         return deleted
 
 

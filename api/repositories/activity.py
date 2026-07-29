@@ -23,8 +23,9 @@ class ActivityRepository(RepositoryMixin):
                            id, device_id, captured_at, received_at, keyboard_events,
                            mouse_clicks, mouse_distance, active_app, agent_version,
                            screenshot_path, storage_version_id, focused_seconds,
-                           interactive_seconds, user_id, project_id, task_id, session_id
-                       ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                           interactive_seconds, user_id, project_id, task_id, session_id,
+                           active_url, automation_suspected
+                       ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (
                         record["id"],
                         record["device_id"],
@@ -43,6 +44,8 @@ class ActivityRepository(RepositoryMixin):
                         record.get("project_id"),
                         record.get("task_id"),
                         record.get("session_id"),
+                        record.get("active_url") or None,
+                        record.get("automation_suspected", False),
                     ),
                 )
             return True

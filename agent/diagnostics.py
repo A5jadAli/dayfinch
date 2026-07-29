@@ -9,6 +9,8 @@ import shutil
 from dataclasses import dataclass
 from typing import Literal
 
+from .idle import _linux_idle_seconds
+
 Status = Literal["pass", "warn", "fail"]
 
 
@@ -135,6 +137,7 @@ def _linux_checks() -> list[DiagnosticCheck]:
         portal_available = (
             _portal_available() if portal_dependency.status == "pass" else False
         )
+        idle_available = _linux_idle_seconds() is not None
         return [
             DiagnosticCheck("display-session", "pass", "Wayland detected"),
             portal_dependency,
@@ -149,6 +152,18 @@ def _linux_checks() -> list[DiagnosticCheck]:
                 "aggregate-input",
                 "warn",
                 "Wayland blocks passive global input monitoring; time and focus remain available",
+            ),
+            DiagnosticCheck(
+                "session-idle",
+                "pass" if idle_available else "warn",
+                "desktop idle time is available for 30-minute deduction"
+                if idle_available
+                else "desktop idle API unavailable; automatic idle deduction is disabled",
+            ),
+            DiagnosticCheck(
+                "capture-consent-persistence",
+                "warn",
+                "Screenshot portal may prompt per capture; persistent ScreenCast is not implemented",
             ),
             DiagnosticCheck(
                 "foreground-application",

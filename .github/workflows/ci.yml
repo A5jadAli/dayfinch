@@ -59,4 +59,6 @@ jobs:
           tests/test_capture.py
           tests/test_config.py
           tests/test_diagnostics.py
+          tests/test_idle.py
           tests/test_queue.py
+          tests/test_website_bridge.py

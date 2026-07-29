@@ -1,3 +1,6 @@
+import uuid
+from datetime import UTC, datetime, timedelta
+
 from api.database import Database
 
 
@@ -77,3 +80,90 @@ def test_task_from_another_project_is_rejected(database: Database):
         assert "device's project" in str(exc)
     else:
         raise AssertionError("cross-project task should be rejected")
+
+
+def _event(database, device, status, task_id, when, **values):
+    return database.sync_work_session(
+        device,
+        status,
+        task_id,
+        event_id=values.pop("event_id", str(uuid.uuid4())),
+        observed_at=when,
+        heartbeat_interval_seconds=values.pop("heartbeat_interval_seconds", 60),
+        **values,
+    )
+
+
+def test_idle_transition_deducts_time_since_last_input(database: Database):
+    _, _, task, device = _setup(database)
+    started = datetime(2026, 7, 28, 8, 0, tzinfo=UTC)
+    session = _event(database, device, "active", task["id"], started)
+    for minute in range(1, 31):
+        _event(
+            database,
+            device,
+            "active",
+            task["id"],
+            started + timedelta(minutes=minute),
+        )
+
+    # Detected after 30 minutes with the last real input one second after start.
+    _event(
+        database,
+        device,
+        "paused",
+        task["id"],
+        started + timedelta(seconds=1801),
+        idle_seconds=1800,
+    )
+
+    with database.connect() as connection:
+        segment = connection.execute(
+            "SELECT * FROM work_session_segments WHERE session_id = %s",
+            (session["id"],),
+        ).fetchone()
+    assert datetime.fromisoformat(segment["ended_at"]) == started + timedelta(seconds=1)
+
+
+def test_state_event_replay_is_idempotent(database: Database):
+    _, _, task, device = _setup(database)
+    observed = datetime(2026, 7, 28, 8, 0, tzinfo=UTC)
+    event_id = str(uuid.uuid4())
+
+    first = _event(database, device, "active", task["id"], observed, event_id=event_id)
+    duplicate = _event(
+        database, device, "active", task["id"], observed, event_id=event_id
+    )
+
+    assert duplicate["id"] == first["id"]
+    with database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) AS count FROM agent_state_events WHERE id = %s",
+                (event_id,),
+            ).fetchone()["count"]
+            == 1
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) AS count FROM work_session_segments WHERE session_id = %s",
+                (first["id"],),
+            ).fetchone()["count"]
+            == 1
+        )
+
+
+def test_restart_gap_caps_previous_offline_session(database: Database):
+    _, _, task, device = _setup(database)
+    started = datetime(2026, 7, 28, 8, 0, tzinfo=UTC)
+    old = _event(database, device, "active", task["id"], started)
+    _event(database, device, "active", task["id"], started + timedelta(minutes=1))
+
+    resumed = _event(
+        database, device, "active", task["id"], started + timedelta(hours=4)
+    )
+
+    assert resumed["id"] != old["id"]
+    stopped = database.get_work_session(old["id"])
+    assert stopped["status"] == "stopped"
+    assert datetime.fromisoformat(stopped["ended_at"]) == started + timedelta(minutes=2)

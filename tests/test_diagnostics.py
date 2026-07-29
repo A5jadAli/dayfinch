@@ -16,6 +16,7 @@ def test_failure_summary_and_formatting():
 def test_wayland_diagnostics_are_transparent_about_input_limits(monkeypatch):
     monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
     monkeypatch.setattr(diagnostics, "_portal_available", lambda: True)
+    monkeypatch.setattr(diagnostics, "_linux_idle_seconds", lambda: 10.0)
     monkeypatch.setattr(
         diagnostics,
         "_dependency_check",
@@ -29,3 +30,5 @@ def test_wayland_diagnostics_are_transparent_about_input_limits(monkeypatch):
     assert by_name["screenshot-portal"].status == "pass"
     assert by_name["aggregate-input"].status == "warn"
     assert "blocks passive" in by_name["aggregate-input"].message
+    assert by_name["session-idle"].status == "pass"
+    assert by_name["capture-consent-persistence"].status == "warn"

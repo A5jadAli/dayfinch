@@ -182,9 +182,45 @@ def _create_timesheets(connection: Connection) -> None:
     )
 
 
+def _add_website_and_automation(connection: Connection) -> None:
+    connection.execute(
+        """
+        ALTER TABLE activity_records
+            ADD COLUMN IF NOT EXISTS active_url TEXT,
+            ADD COLUMN IF NOT EXISTS automation_suspected BOOLEAN NOT NULL DEFAULT FALSE;
+        """
+    )
+
+
+def _add_durable_state_events(connection: Connection) -> None:
+    connection.execute(
+        """
+        CREATE TABLE IF NOT EXISTS agent_state_events (
+            id UUID NOT NULL,
+            device_id UUID NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+            observed_at TIMESTAMPTZ NOT NULL,
+            received_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            status TEXT NOT NULL CHECK(status IN ('active', 'paused', 'stopped')),
+            task_id UUID REFERENCES tasks(id) ON DELETE SET NULL,
+            idle_seconds INTEGER NOT NULL DEFAULT 0 CHECK(idle_seconds >= 0),
+            heartbeat_interval_seconds INTEGER NOT NULL
+                CHECK(heartbeat_interval_seconds BETWEEN 15 AND 3600),
+            session_id UUID REFERENCES work_sessions(id) ON DELETE SET NULL,
+            PRIMARY KEY(device_id, id)
+        );
+        CREATE INDEX IF NOT EXISTS idx_agent_state_device_observed
+        ON agent_state_events(device_id, observed_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_agent_state_received
+        ON agent_state_events(received_at);
+        """
+    )
+
+
 MIGRATIONS = (
     Migration(1, "create_postgresql_schema", _create_schema),
     Migration(2, "create_timesheets", _create_timesheets),
+    Migration(3, "add_website_and_automation", _add_website_and_automation),
+    Migration(4, "add_durable_state_events", _add_durable_state_events),
 )
 
 

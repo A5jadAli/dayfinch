@@ -10,11 +10,13 @@ from agent import capture
 
 def test_capture_uses_portal_on_wayland(monkeypatch):
     monkeypatch.setattr(capture, "is_wayland", lambda: True)
-    monkeypatch.setattr(capture, "_capture_wayland", lambda quality: b"portal")
+    monkeypatch.setattr(
+        capture, "_capture_wayland", lambda quality, max_dimension: b"portal"
+    )
     monkeypatch.setattr(
         capture,
         "_capture_mss",
-        lambda _all_monitors, _quality: (_ for _ in ()).throw(AssertionError()),
+        lambda _all, _quality, _max: (_ for _ in ()).throw(AssertionError()),
     )
 
     assert capture.capture_screenshot(all_monitors=True, jpeg_quality=65) == b"portal"
@@ -23,7 +25,7 @@ def test_capture_uses_portal_on_wayland(monkeypatch):
 def test_capture_uses_mss_outside_wayland(monkeypatch):
     monkeypatch.setattr(capture, "is_wayland", lambda: False)
     monkeypatch.setattr(
-        capture, "_capture_mss", lambda all_monitors, quality: b"desktop"
+        capture, "_capture_mss", lambda all_monitors, quality, max_dimension: b"desktop"
     )
 
     assert capture.capture_screenshot(all_monitors=False, jpeg_quality=70) == b"desktop"
