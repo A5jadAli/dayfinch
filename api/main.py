@@ -5,10 +5,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 
+from . import __version__
 from .config import Settings
 from .database import Database
 from .routers.agent_api import router as agent_api_router
@@ -18,9 +20,13 @@ from .routers.devices import router as devices_router
 from .routers.projects import router as projects_router
 from .routers.reports import router as reports_router
 from .routers.timesheets import router as timesheets_router
+from .routers.workforce import router as workforce_router
 from .security import hash_password
+from .services.invoice_vault import InvoiceVault
+from .services.payments import PayrollDeliveryService
+from .services.report_delivery import ReportDeliveryService, run_report_delivery_worker
 from .services.retention import RetentionService, run_retention_worker
-from .services.timesheets import TimesheetService
+from .services.timesheets import TimesheetService, run_timesheet_generation_worker
 from .storage import create_storage
 from .web import WebSecurity
 
@@ -38,6 +44,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     storage = create_storage(settings)
     retention = RetentionService(database, storage, settings.retention_days)
+    report_delivery = ReportDeliveryService(database, settings)
+    payroll_delivery = PayrollDeliveryService(database, settings)
+    invoice_vault = InvoiceVault(database, storage, settings)
 
     @asynccontextmanager
     async def lifespan(_: FastAPI):
@@ -45,23 +54,29 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         database.bootstrap_admin(
             settings.admin_email, hash_password(settings.admin_password)
         )
+        database.generate_open_timesheets()
         retention.purge_expired()
-        task = asyncio.create_task(run_retention_worker(retention))
+        retention_task = asyncio.create_task(run_retention_worker(retention))
+        report_task = asyncio.create_task(run_report_delivery_worker(report_delivery))
+        timesheet_task = asyncio.create_task(run_timesheet_generation_worker(database))
         try:
             yield
         finally:
-            task.cancel()
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+            for task in (retention_task, report_task, timesheet_task):
+                task.cancel()
+            await asyncio.gather(
+                retention_task, report_task, timesheet_task, return_exceptions=True
+            )
             database.close()
 
-    app = FastAPI(title="Dayfinch", version="0.5.0", lifespan=lifespan)
+    app = FastAPI(title="Dayfinch", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.state.database = database
     app.state.storage = storage
     app.state.retention = retention
+    app.state.report_delivery = report_delivery
+    app.state.payroll_delivery = payroll_delivery
+    app.state.invoice_vault = invoice_vault
     app.state.web = WebSecurity(database)
     app.state.timesheets = TimesheetService(database)
     app.state.templates = Jinja2Templates(directory=UI_DIR / "templates")
@@ -75,12 +90,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         max_age=8 * 60 * 60,
     )
     app.mount("/static", StaticFiles(directory=UI_DIR / "static"), name="static")
+
+    @app.get("/service-worker.js", include_in_schema=False)
+    def service_worker() -> FileResponse:
+        return FileResponse(
+            UI_DIR / "static" / "service-worker.js",
+            media_type="application/javascript",
+            headers={"Service-Worker-Allowed": "/"},
+        )
+
     app.include_router(auth_router)
     app.include_router(dashboard_router)
     app.include_router(projects_router)
     app.include_router(devices_router)
     app.include_router(reports_router)
     app.include_router(timesheets_router)
+    app.include_router(workforce_router)
     app.include_router(agent_api_router)
 
     @app.get("/health", tags=["operations"])

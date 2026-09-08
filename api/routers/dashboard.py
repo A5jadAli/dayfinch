@@ -12,16 +12,17 @@ def dashboard(request: Request):
         return redirect
     user = web.require_user(request)
     database = request.app.state.database
-    owner_filter = None if user["role"] == "admin" else user["id"]
+    elevated = user["role"] in {"admin", "manager"}
+    owner_filter = None if elevated else user["id"]
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="dashboard.html",
         context=web.page_context(
             request,
             devices=database.list_devices(owner_filter),
-            users=database.list_users() if user["role"] == "admin" else [],
-            projects=database.list_projects(
-                None if user["role"] == "admin" else user["id"]
-            ),
+            users=database.list_users() if elevated else [],
+            projects=database.list_projects(owner_filter),
+            summary=database.dashboard_summary(owner_filter),
+            active_timer=database.active_timer(user["id"]),
         ),
     )

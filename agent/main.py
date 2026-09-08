@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import argparse
 import logging
+import random
 import signal
+import sqlite3
 import sys
 import threading
 import time
@@ -15,7 +17,7 @@ from PIL import Image, ImageDraw
 from . import __version__
 from .active_app import active_application, active_website
 from .activity import ActivityMonitor
-from .capture import capture_screenshot
+from .capture import blur_screenshot, capture_screenshot
 from .client import TrackerClient
 from .config import AgentConfig
 from .diagnostics import format_diagnostics, has_failures, run_diagnostics
@@ -36,6 +38,7 @@ OBSERVATION_INTERVAL_SECONDS = 10.0
 
 # Retry delay when the queue has items the server would not take yet.
 UPLOAD_RETRY_SECONDS = 5.0
+POLICY_REFRESH_SECONDS = 300.0
 
 
 class TrackerAgent:
@@ -46,7 +49,9 @@ class TrackerAgent:
         self.website_bridge = WebsiteBridge(
             config.website_bridge_token, config.website_bridge_port
         )
-        self.queue = OfflineQueue(config.queue_dir, config.max_queue_items)
+        self.queue = OfflineQueue(
+            config.queue_dir, config.max_queue_items, config.device_token
+        )
         self.client = TrackerClient(config.server_url, config.device_token, __version__)
         self.stop_event = threading.Event()
         self.capture_event = threading.Event()
@@ -57,6 +62,15 @@ class TrackerAgent:
         self._active_app = "Unknown"
         self._active_url = ""
         self._session_id = ""
+        self._selected_task_id = config.task_id
+        self._selected_project_id = ""
+        self._note = ""
+        self._capture_interval_seconds = config.capture_interval_seconds
+        self._screenshots_enabled = True
+        self._screenshot_blur = False
+        self._track_apps = True
+        self._track_urls = config.collect_websites
+        self._idle_timeout_seconds = config.idle_timeout_seconds
         self._heartbeat_event = threading.Event()
         self._stopped = False
         self._rejections = 0
@@ -74,7 +88,15 @@ class TrackerAgent:
         with self._state_lock:
             return self._status
 
+    @property
+    def tracking_active(self) -> bool:
+        return not self._suspended()
+
     def start(self) -> None:
+        try:
+            self.catalog()
+        except (httpx.HTTPError, OSError, ValueError):
+            LOGGER.warning("Using local tracking policy until the server is reachable")
         if not self.activity.start():
             LOGGER.warning(
                 "Aggregate keyboard and mouse counts are unavailable on this desktop"
@@ -107,8 +129,12 @@ class TrackerAgent:
             self._worker.join(timeout=8)
         # Journal first. If the network or power disappears during shutdown, this
         # transition is replayed on the next launch instead of being lost.
-        self._send_heartbeat(status="stopped")
-        self.client.close()
+        try:
+            self._send_heartbeat(status="stopped")
+        except (OSError, sqlite3.Error, ValueError) as exc:
+            LOGGER.error("Unable to journal the final stopped event: %s", exc)
+        finally:
+            self.client.close()
 
     def toggle_pause(self) -> None:
         with self._state_lock:
@@ -119,8 +145,49 @@ class TrackerAgent:
         self._heartbeat_event.set()
         LOGGER.info("Tracking %s", "paused" if paused else "resumed")
 
+    @property
+    def selected_task_id(self) -> str:
+        with self._state_lock:
+            return self._selected_task_id
+
+    @property
+    def selected_project_id(self) -> str:
+        with self._state_lock:
+            return self._selected_project_id
+
+    def select_work(self, project_id: str, task_id: str = "") -> None:
+        with self._state_lock:
+            changed = (project_id, task_id) != (
+                self._selected_project_id,
+                self._selected_task_id,
+            )
+            self._selected_project_id = project_id
+            self._selected_task_id = task_id
+        if changed:
+            self._heartbeat_event.set()
+
+    def set_note(self, note: str) -> None:
+        with self._state_lock:
+            self._note = note.strip()[:500]
+        self._heartbeat_event.set()
+
+    def catalog(self) -> dict:
+        policy = self.client.configuration()
+        frequency = int(policy.get("screenshot_frequency", 1))
+        self._screenshots_enabled = frequency > 0
+        self._capture_interval_seconds = (
+            86_400 if frequency <= 0 else max(60, 600 // frequency)
+        )
+        self._screenshot_blur = bool(policy.get("screenshot_blur"))
+        self._track_apps = bool(policy.get("track_apps", True))
+        self._track_urls = bool(policy.get("track_urls", True))
+        self._idle_timeout_seconds = max(
+            60, int(policy.get("idle_timeout_minutes", 20)) * 60
+        )
+        return policy
+
     def capture_now(self) -> None:
-        if not self.paused:
+        if not self.paused and self._screenshots_enabled:
             self.capture_event.set()
 
     def _set_status(self, value: str) -> None:
@@ -138,7 +205,7 @@ class TrackerAgent:
         idle. This only runs where input can actually be observed; on Wayland the
         signal is unavailable, so absence of input is never assumed to be idleness.
         """
-        timeout = self.config.idle_timeout_seconds
+        timeout = self._idle_timeout_seconds
         if not timeout or self.paused:
             return
         idle = self.system_idle.seconds(now)
@@ -188,39 +255,88 @@ class TrackerAgent:
         self._rejections = 0
 
     def _work_loop(self) -> None:
-        next_capture = time.monotonic() + self.config.capture_interval_seconds
+        next_capture = (
+            time.monotonic()
+            + random.uniform(0.75, 1.25) * self._capture_interval_seconds
+        )
         next_heartbeat = 0.0
         next_upload = 0.0
         next_observation = 0.0
+        next_policy_refresh = time.monotonic() + POLICY_REFRESH_SECONDS
         while not self.stop_event.is_set():
             now = time.monotonic()
+            if now >= next_policy_refresh:
+                try:
+                    self.catalog()
+                    next_capture = (
+                        now
+                        + random.uniform(0.75, 1.25) * self._capture_interval_seconds
+                    )
+                except (httpx.HTTPError, OSError, ValueError):
+                    LOGGER.debug("Tracking policy refresh deferred while offline")
+                next_policy_refresh = now + POLICY_REFRESH_SECONDS
             self._update_idle_state(now)
             if not self._suspended() and now >= next_observation:
-                self._active_app = active_application()
-                self.activity.observe(self._active_app, now=now)
+                try:
+                    self._active_app = active_application() if self._track_apps else ""
+                    self._active_url = (
+                        self.website_bridge.current_domain()
+                        or active_website(self._active_app)
+                        if self._track_urls
+                        else ""
+                    )
+                    self.activity.observe(self._active_app, now=now)
+                    self.queue.add_usage(
+                        self._active_app,
+                        self._active_url,
+                        round(OBSERVATION_INTERVAL_SECONDS),
+                    )
+                except (OSError, sqlite3.Error, ValueError) as exc:
+                    self._set_status("Local journal unavailable · tracking not saved")
+                    LOGGER.error("Unable to journal application/domain usage: %s", exc)
                 next_observation = now + OBSERVATION_INTERVAL_SECONDS
             if now >= next_heartbeat or self._heartbeat_event.is_set():
                 self._heartbeat_event.clear()
-                self._send_heartbeat()
+                try:
+                    self._send_heartbeat()
+                except (OSError, sqlite3.Error, ValueError) as exc:
+                    self._set_status("Local journal unavailable · tracking not saved")
+                    LOGGER.error("Unable to journal time heartbeat: %s", exc)
                 next_heartbeat = now + self.config.heartbeat_interval_seconds
 
-            if not self._suspended() and (
-                now >= next_capture or self.capture_event.is_set()
+            if (
+                self._screenshots_enabled
+                and not self._suspended()
+                and (now >= next_capture or self.capture_event.is_set())
             ):
                 self.capture_event.clear()
                 self._capture_to_queue()
-                next_capture = time.monotonic() + self.config.capture_interval_seconds
+                next_capture = (
+                    time.monotonic()
+                    + random.uniform(0.75, 1.25) * self._capture_interval_seconds
+                )
 
             # count() is cached, so an empty queue costs nothing. Without this the
             # agent woke SQLite every few seconds for its whole idle life.
-            if now >= next_upload and (self.queue.state_count() or self.queue.count()):
+            if now >= next_upload and (
+                self.queue.state_count()
+                or self.queue.usage_count()
+                or self.queue.count()
+            ):
                 # State must reach the server first so an offline screenshot can be
                 # attributed to the reconstructed session containing captured_at.
-                uploaded = (
-                    self._upload_state_one()
-                    if self.queue.state_count()
-                    else self._upload_one()
-                )
+                try:
+                    uploaded = (
+                        self._upload_state_one()
+                        if self.queue.state_count()
+                        else self._upload_usage_one()
+                        if self.queue.usage_count()
+                        else self._upload_one()
+                    )
+                except (OSError, sqlite3.Error, ValueError) as exc:
+                    uploaded = False
+                    self._set_status("Encrypted queue needs attention")
+                    LOGGER.error("Unable to read the encrypted queue: %s", exc)
                 next_upload = now + (0.2 if uploaded else UPLOAD_RETRY_SECONDS)
 
             self.stop_event.wait(0.5)
@@ -233,7 +349,9 @@ class TrackerAgent:
                 jpeg_quality=self.config.jpeg_quality,
                 max_dimension=self.config.max_image_dimension,
             )
-            if self.config.collect_websites:
+            if self._screenshot_blur:
+                screenshot = blur_screenshot(screenshot, self.config.jpeg_quality)
+            if self._track_urls:
                 # The extension itself reports an empty domain when its browser
                 # loses OS focus, which also makes this work on Wayland where the
                 # desktop cannot identify another process's foreground window.
@@ -264,13 +382,32 @@ class TrackerAgent:
         record = pending[0]
         try:
             self._set_status(f"Uploading ({self.queue.count()} pending)")
-            self.client.upload(record)
+            self.client.upload(record, self.queue.read_screenshot(record))
             self.queue.acknowledge(record)
             self._set_status("Active" if not self.paused else "Paused by employee")
             return True
+        except (ValueError, FileNotFoundError) as exc:
+            self.queue.quarantine_record(record, str(exc))
+            self._set_status(
+                f"Needs attention · {self.queue.quarantine_count()} quarantined"
+            )
+            LOGGER.error("Queued screenshot quarantined: %s", exc)
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
                 self._note_rejection()
+            elif (
+                exc.response.status_code == 403
+                and "screenshot collection is disabled" in exc.response.text.lower()
+            ):
+                self.queue.acknowledge(record)
+                self._screenshots_enabled = False
+                self._set_status("Active · screenshots disabled by policy")
+            elif exc.response.status_code in {400, 404, 409, 410, 413, 415, 422}:
+                self.queue.quarantine_record(record, exc.response.text)
+                self._set_status(
+                    f"Needs attention · {self.queue.quarantine_count()} quarantined"
+                )
+                LOGGER.error("Permanently rejected screenshot quarantined: %s", exc)
             else:
                 self._set_status(f"Server rejected upload ({exc.response.status_code})")
                 LOGGER.warning("Upload rejected: %s", exc)
@@ -284,7 +421,9 @@ class TrackerAgent:
         idle_seconds = self._idle_deduction_seconds if state == "paused" else 0
         self.queue.add_state(
             state,
-            task_id=self.config.task_id if state != "stopped" else "",
+            task_id=self.selected_task_id if state != "stopped" else "",
+            project_id=self.selected_project_id if state != "stopped" else "",
+            note=self._note if state != "stopped" else "",
             idle_seconds=idle_seconds,
             heartbeat_interval_seconds=self.config.heartbeat_interval_seconds,
         )
@@ -304,12 +443,50 @@ class TrackerAgent:
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 401:
                 self._note_rejection()
+            elif exc.response.status_code in {400, 404, 409, 410, 413, 415, 422}:
+                self.queue.quarantine_state(event, exc.response.text)
+                self._set_status(
+                    f"Needs attention · {self.queue.quarantine_count()} quarantined"
+                )
+                LOGGER.error("Permanently rejected time event quarantined: %s", exc)
             else:
                 LOGGER.warning(
                     "Heartbeat rejected by the server (%s)", exc.response.status_code
                 )
         except (httpx.HTTPError, OSError):
-            pending_count = self.queue.state_count() + self.queue.count()
+            pending_count = (
+                self.queue.state_count() + self.queue.usage_count() + self.queue.count()
+            )
+            self._set_status(f"Offline ({pending_count} pending)")
+        return False
+
+    def _upload_usage_one(self) -> bool:
+        pending = self.queue.pending_usage(limit=1)
+        if not pending:
+            return False
+        event = pending[0]
+        try:
+            self.client.upload_usage(event)
+            self.queue.acknowledge_usage(event)
+            self._note_accepted()
+            return True
+        except httpx.HTTPStatusError as exc:
+            if exc.response.status_code == 401:
+                self._note_rejection()
+            elif exc.response.status_code in {400, 404, 409, 410, 413, 415, 422}:
+                self.queue.quarantine_usage(event, exc.response.text)
+                self._set_status(
+                    f"Needs attention · {self.queue.quarantine_count()} quarantined"
+                )
+                LOGGER.error("Permanently rejected usage event quarantined: %s", exc)
+            else:
+                LOGGER.warning(
+                    "Usage sample rejected by the server (%s)", exc.response.status_code
+                )
+        except (httpx.HTTPError, OSError):
+            pending_count = (
+                self.queue.state_count() + self.queue.usage_count() + self.queue.count()
+            )
             self._set_status(f"Offline ({pending_count} pending)")
         return False
 
@@ -466,7 +643,11 @@ def run() -> None:
         "titles. Long idle periods are not counted as work.",
         flush=True,
     )
-    agent = TrackerAgent(config)
+    try:
+        agent = TrackerAgent(config)
+    except (OSError, ValueError) as exc:
+        print(f"Offline queue error: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
     install_shutdown_handlers(agent)
     try:
         agent.start()
@@ -475,7 +656,9 @@ def run() -> None:
             while not agent.stop_event.wait(1):
                 pass
         else:
-            run_tray(agent)
+            from .desktop import run_desktop
+
+            run_desktop(agent)
     except KeyboardInterrupt:
         pass
     finally:

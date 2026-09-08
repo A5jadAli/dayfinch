@@ -1,39 +1,48 @@
 # Dayfinch
 
-Dayfinch is a transparent, consent-based time and activity tracker for teams using
-Windows, macOS, or Linux. It is designed for modern AI-assisted work: activity
-includes foreground focus and recent interaction time, so reading code, reviewing
-AI output, builds, and debugging are not incorrectly treated as zero work.
+Dayfinch is a complete, self-hosted workforce operations platform inspired by the
+workflows of modern time trackers. It combines a Windows/macOS/Linux desktop timer,
+a web timer, activity context, workforce administration, field operations, and
+financial workflows under the original Dayfinch brand.
 
 ## Current capabilities
 
-- Admin invitations, member accounts, and secure one-time device enrollment.
-- Users can belong to multiple projects; devices, tasks, sessions, screenshots,
-  and timesheets remain attributed to the correct project.
-- Visible pause/resume controls, configurable screenshots, aggregate keyboard and
-  mouse counts, foreground application names, and a bounded offline queue.
-- Foreground website domain (host only), automatic idle deduction after a
-  configurable no-input period, and detection of synthetic ("faked") input.
-- Work sessions and submitted timesheets with admin approval/rejection, audit
-  events, review notes, and approved-period locking.
-- PostgreSQL persistence, versioned migrations, private local or S3-compatible
-  screenshot storage, retention cleanup, and owner-controlled interval deletion.
+- Owner, manager, member, and project-viewer access; invitations, teams and team
+  leads; project membership; per-member pay/bill rates and daily/weekly limits.
+- Desktop and web timers with project/task switching, work notes, breaks,
+  idle-time deduction, durable offline replay, and graceful shutdown recovery.
+- Randomized multi-monitor screenshots (0–3 per ten minutes), irreversible
+  on-device blur, keyboard/mouse activity levels, independent encrypted app/domain
+  sampling, and unusual input signals. Dayfinch never records typed keys.
+- Dashboard, screenshot gallery, app/URL summaries, manual-time approvals,
+  timesheet submission/review/locking, notifications, and CSV exports.
+- Projects, tasks, global/project to-dos, clients, hour/cost budgets, billable
+  rates, schedules, attendance, PTO, holidays schema, and expense approvals.
+- AES-256-GCM sealed invoice documents with tamper detection, invoice status, pay
+  rates, overtime-aware payroll runs, HMAC-signed payment-provider callbacks,
+  integrations, and emailed scheduled reports.
+- Installable field PWA with AES-GCM offline timer/location journaling, mobile GPS
+  API, job-site geofences, automatic timer actions, enter/exit events, and
+  scheduled-versus-worked attendance reports.
+- PostgreSQL migrations, audit events, TOTP two-factor login enforcement, secure
+  sessions/CSRF, screenshot/app/domain/GPS retention cleanup, and private local or
+  S3-compatible storage.
 - Privacy by design: no key values, clipboard content, full window titles, full page
   URLs, browser history, audio, webcam recording, or user-file collection. Only the
   domain of the active browser tab is recorded, and only what the running agent
   discloses on start-up is collected.
 
-Dayfinch is ready for local evaluation, not yet a complete production replacement
-for Hubstaff. The critical next work is timesheet correction workflows, project
-budgets and alerts, manager roles, exports, stronger authentication, signed desktop
-installers, and load/security testing.
+The UI and terminology are Dayfinch originals; the product follows familiar
+workforce-tracker workflows without copying another product's protected branding.
+See [docs/hubstaff-parity.md](docs/hubstaff-parity.md) for the researched feature
+map and platform-specific constraints.
 
 ## Structure
 
 ```text
 api/        FastAPI routes, services, repositories, PostgreSQL, and security
 ui/         Server-rendered templates and static assets
-agent/      Desktop capture, activity signals, tray controls, and offline queue
+agent/      Desktop timer UI, capture/activity signals, policy sync, and offline queue
 extensions/ Browser integration that reports the active domain only
 tests/      API, database, security, storage, agent, and workflow tests
 packaging/  Desktop-agent packaging entry point
@@ -45,7 +54,7 @@ Requirements: Docker with Compose and ports `8000` and `5432` available.
 
 ```bash
 cp .env.example .env
-# Replace all three placeholder values in .env.
+# Replace the password/session/database and document-encryption placeholders.
 docker compose up --build -d
 docker compose ps
 curl http://127.0.0.1:8000/health
@@ -102,12 +111,13 @@ token. Then:
 python -m pip install -e ".[agent]"
 cp agent.toml.example agent.toml
 # Set the token and explicitly confirm consent in agent.toml.
-dayfinch-agent --config ./agent.toml --no-tray
+dayfinch-agent --config ./agent.toml
 ```
 
-Use `--no-tray` only for a visible terminal-based local test. Normal desktop use
-should keep the tray controls available. macOS requires Screen Recording and Input
-Monitoring permission; Wayland support depends on the compositor's capture portal.
+The default opens the Dayfinch timer with project/task selection, work notes, a
+live clock, pause/resume, and capture-now controls. Use `--no-tray` for a visible
+terminal/service-mode test. macOS requires Screen Recording and Input Monitoring
+permission; Wayland support depends on the compositor's capture portal.
 
 Stopping the agent always closes the open work session, whether it is quit from the
 tray, interrupted with Ctrl+C, or terminated by a service manager, logout, or
@@ -159,7 +169,9 @@ input monitoring also hides synthetic input, so a jiggler both resets the sessio
 idle timer and produces nothing for the detector to inspect. On those desktops the
 screenshots and the focus record remain the only evidence.
 
-Website domain: macOS reads the foreground browser with Automation permission.
+Website domain: while tracking, the agent independently journals a host-only sample
+about every ten seconds; it does not wait for a screenshot. macOS reads the
+foreground browser with Automation permission.
 Linux and Windows use the WebExtension in `extensions/chromium` (Chrome/Edge 121+
 or Firefox 121+): load it as a temporary/unpacked extension, generate a random 32+
 character token, place the same token in `agent.toml` and the extension options,
@@ -181,8 +193,15 @@ network access. UUIDs make replay idempotent. While offline, minute-level events
 prove continuous work and screenshots remain in the bounded queue; state events are
 uploaded first when connectivity returns so captures resolve to the correct session.
 After an abrupt shutdown, a later gap caps the old segment one heartbeat after its
-last durable observation. With the defaults, four offline hours and the final
-minute-level checkpoint survive; time after the last checkpoint cannot be inferred.
+last durable observation. The compact time-state journal survives long outages;
+screenshots use the configured bounded queue and discard the oldest capture first
+when full. Time after the last durable checkpoint cannot be inferred.
+
+Offline screenshots, application names, domains, and work notes are AES-256-GCM
+encrypted using a key derived from the device enrollment secret. State transitions
+remain queryable for ordered replay, but their notes are encrypted. Re-enrolling a
+device with queued work requires draining or deliberately discarding the old queue
+before replacing its enrollment secret.
 
 ## Desktop cost
 
@@ -201,10 +220,24 @@ the largest effect.
 
 ## Configuration
 
-`.env.example` contains only the three values required by the local Compose stack.
-Other server settings have safe local defaults in [api/config.py](api/config.py).
-Production deployments should use HTTPS, secure cookies, a private S3-compatible
-bucket, managed secrets, MFA/SSO, signed agents, backups, monitoring, and an
-independent security/privacy review.
+`.env.example` contains the local Compose values plus a documented private
+S3-compatible storage configuration. Set `TRACKER_STORAGE_BACKEND=s3`, bucket,
+region/endpoint, and standard `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`
+credentials; objects are private, encrypted with AES-256 by default, version-aware,
+and served only after Dayfinch authorization. Production deployments should also
+use HTTPS, secure cookies, managed secrets, signed agents, backups, monitoring, and
+an independent security/privacy review.
+
+Scheduled emails use the `TRACKER_SMTP_*` settings. Payroll dispatch uses an
+operator-controlled adapter configured with `TRACKER_PAYMENT_WEBHOOK_URL` and
+`TRACKER_PAYMENT_WEBHOOK_SECRET`; this keeps provider credentials outside
+Dayfinch while authenticating outgoing requests and status callbacks.
+
+Set `TRACKER_DOCUMENT_ENCRYPTION_KEY` to a stable URL-safe base64 encoding of 32
+random bytes. Full invoice snapshots are authenticated and encrypted before local
+or S3 storage; only authorized server-side decryption renders the printable copy.
+Changing this key without re-encrypting existing documents makes them unreadable.
+Use [docs/testing-playbook.md](docs/testing-playbook.md) for the automated gate,
+online/offline A/B comparisons, and manual cross-platform edge-case checklist.
 
 Licensed under the [MIT License](LICENSE).

@@ -30,7 +30,8 @@ async function reportActiveDomain() {
       body: JSON.stringify({token: bridgeToken, domain})
     });
   } catch (_error) {
-    // The agent may be paused, stopped, or offline. Browser use is never queued.
+    // The agent may be paused or stopped. The agent encrypts accepted samples in
+    // its durable queue; the extension itself intentionally stores no browsing log.
   }
 }
 

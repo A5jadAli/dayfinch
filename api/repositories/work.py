@@ -61,11 +61,21 @@ class WorkRepository(RepositoryMixin):
             ).fetchone()
         return dict(row) if row else None
 
+    def set_task_status(self, task_id: str, task_status: str) -> None:
+        if task_status not in {"active", "archived"}:
+            raise ValueError("Invalid task status")
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE tasks SET status=%s WHERE id=%s", (task_status, task_id)
+            )
+
     def sync_work_session(
         self,
         device: dict[str, Any],
         status: str,
         task_id: str | None,
+        selected_project_id: str | None = None,
+        note: str = "",
         *,
         event_id: str | None = None,
         observed_at: datetime | None = None,
@@ -82,15 +92,50 @@ class WorkRepository(RepositoryMixin):
             )
         ):
             raise ValueError("The current timesheet period is approved and locked")
-        project_id = device.get("project_id")
+        owner = (
+            self.get_user(device["owner_user_id"])
+            if device.get("owner_user_id")
+            else None
+        )
+        if status == "active" and owner and owner["role"] == "member":
+            check_date = (observed_at or datetime.now(UTC)).date()
+            with self.connect() as limit_connection:
+                limits = limit_connection.execute(
+                    """SELECT
+                          COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(seg.ended_at,CURRENT_TIMESTAMP)-seg.started_at))) FILTER (WHERE seg.started_at::date=%s),0)/60 daily,
+                          COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(seg.ended_at,CURRENT_TIMESTAMP)-seg.started_at))) FILTER (WHERE seg.started_at::date BETWEEN date_trunc('week',%s::date)::date AND date_trunc('week',%s::date)::date+6),0)/60 weekly
+                          FROM work_sessions ws JOIN work_session_segments seg ON seg.session_id=ws.id WHERE ws.user_id=%s""",
+                    (check_date, check_date, check_date, owner["id"]),
+                ).fetchone()
+            if (
+                owner["daily_limit_minutes"]
+                and limits["daily"] >= owner["daily_limit_minutes"]
+            ):
+                raise ValueError("Daily tracking limit reached")
+            if (
+                owner["weekly_limit_minutes"]
+                and limits["weekly"] >= owner["weekly_limit_minutes"]
+            ):
+                raise ValueError("Weekly tracking limit reached")
+        project_id = selected_project_id or device.get("project_id")
+        if (
+            selected_project_id
+            and owner
+            and owner["role"] not in {"admin", "manager"}
+            and not self.is_project_member(project_id, owner["id"])
+        ):
+            raise ValueError("Project is not assigned to this member")
         if task_id:
             task = self.get_task(task_id)
-            if (
-                not task
-                or task["project_id"] != project_id
-                or task["status"] != "active"
-            ):
-                raise ValueError("Task is not active in this device's project")
+            if not task or task["status"] != "active":
+                raise ValueError("Task is not active")
+            if project_id and task["project_id"] != project_id:
+                raise ValueError(
+                    "Task is not active in this device's project"
+                    if not selected_project_id
+                    else "Task does not belong to the selected project"
+                )
+            project_id = task["project_id"]
         observed = observed_at or datetime.now(UTC)
         if observed.tzinfo is None:
             raise ValueError("observed_at must include a timezone")
@@ -151,7 +196,9 @@ class WorkRepository(RepositoryMixin):
                         ),
                     )
                     session = None
-            if session and session["task_id"] != task_id:
+            if session and (
+                session["task_id"] != task_id or session["project_id"] != project_id
+            ):
                 self._stop_session(connection, session["id"], observed)
                 session = None
             if status == "stopped":
@@ -165,6 +212,8 @@ class WorkRepository(RepositoryMixin):
                         observed,
                         status,
                         task_id,
+                        project_id,
+                        note,
                         idle_seconds,
                         heartbeat_interval_seconds,
                         None,
@@ -174,9 +223,9 @@ class WorkRepository(RepositoryMixin):
                 session_id = str(uuid.uuid4())
                 connection.execute(
                     """INSERT INTO work_sessions(
-                           id, user_id, device_id, project_id, task_id, status,
+                           id, user_id, device_id, project_id, task_id, status, note,
                            started_at, created_at, updated_at
-                       ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                       ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (
                         session_id,
                         device.get("owner_user_id"),
@@ -184,6 +233,7 @@ class WorkRepository(RepositoryMixin):
                         project_id,
                         task_id,
                         status,
+                        note.strip()[:500],
                         observed,
                         now,
                         now,
@@ -199,8 +249,8 @@ class WorkRepository(RepositoryMixin):
                 elif status == "active" and session["status"] == "paused":
                     self._start_segment(connection, session_id, observed)
                 connection.execute(
-                    "UPDATE work_sessions SET status = %s, updated_at = %s WHERE id = %s",
-                    (status, now, session_id),
+                    "UPDATE work_sessions SET status = %s, note = %s, updated_at = %s WHERE id = %s",
+                    (status, note.strip()[:500], now, session_id),
                 )
             if event_id:
                 self._insert_state_event(
@@ -210,6 +260,8 @@ class WorkRepository(RepositoryMixin):
                     observed,
                     status,
                     task_id,
+                    project_id,
+                    note,
                     idle_seconds,
                     heartbeat_interval_seconds,
                     session_id,
@@ -236,21 +288,25 @@ class WorkRepository(RepositoryMixin):
         observed_at: datetime,
         status: str,
         task_id: str | None,
+        project_id: str | None,
+        note: str,
         idle_seconds: int,
         heartbeat_interval_seconds: int,
         session_id: str | None,
     ) -> None:
         connection.execute(
             """INSERT INTO agent_state_events(
-                   id, device_id, observed_at, status, task_id, idle_seconds,
+                   id, device_id, observed_at, status, task_id, project_id, note, idle_seconds,
                    heartbeat_interval_seconds, session_id
-               ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)""",
+               ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 event_id,
                 device_id,
                 observed_at,
                 status,
                 task_id,
+                project_id,
+                note.strip()[:500],
                 idle_seconds,
                 heartbeat_interval_seconds,
                 session_id,
@@ -294,6 +350,17 @@ class WorkRepository(RepositoryMixin):
                 (cutoff,),
             )
         return max(0, result.rowcount)
+
+    def delete_context_events_before(self, cutoff: str) -> int:
+        """Purge sensitive app/site and location telemetry after retention expiry."""
+        with self.connect() as connection:
+            usage = connection.execute(
+                "DELETE FROM usage_records WHERE observed_at < %s", (cutoff,)
+            )
+            locations = connection.execute(
+                "DELETE FROM location_events WHERE recorded_at < %s", (cutoff,)
+            )
+        return max(0, usage.rowcount) + max(0, locations.rowcount)
 
     def list_work_sessions(
         self, user_id: str | None = None, project_id: str | None = None

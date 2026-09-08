@@ -62,6 +62,28 @@ class AccountsRepository(RepositoryMixin):
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def set_two_factor_secret(
+        self, user_id: str, secret: str | None, *, enabled: bool
+    ) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE users SET totp_secret=%s,two_factor_enabled=%s WHERE id=%s",
+                (secret, enabled, user_id),
+            )
+
+    def set_user_enabled(self, user_id: str, enabled: bool) -> None:
+        with self.connect() as connection:
+            result = connection.execute(
+                "UPDATE users SET enabled=%s WHERE id=%s", (enabled, user_id)
+            )
+            if result.rowcount != 1:
+                raise ValueError("Member not found")
+            if not enabled:
+                connection.execute(
+                    "UPDATE devices SET enabled=FALSE WHERE owner_user_id=%s",
+                    (user_id,),
+                )
+
     def create_invitation(
         self, email: str, created_by_user_id: str, valid_hours: int
     ) -> tuple[dict[str, Any], str]:

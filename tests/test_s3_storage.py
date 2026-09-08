@@ -57,6 +57,13 @@ def test_s3_storage_keeps_version_for_exact_deletion(tmp_path, monkeypatch):
     assert client.put_arguments["ServerSideEncryption"] == "AES256"
     assert storage.read(stored.key).data == b"\xff\xd8\xffstored"
 
+    encrypted = storage.save_blob(
+        "invoices/invoice-id.dfenc", b"ciphertext", "application/octet-stream"
+    )
+    assert encrypted.key == "invoices/invoice-id.dfenc"
+    assert client.put_arguments["ContentType"] == "application/octet-stream"
+    assert client.put_arguments["ServerSideEncryption"] == "AES256"
+
     storage.delete(stored.key, stored.version_id)
     assert client.delete_arguments == {
         "Bucket": "private-captures",

@@ -28,6 +28,15 @@ class Settings:
     s3_endpoint_url: str = ""
     s3_sse: str = "AES256"
     s3_kms_key_id: str = ""
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_starttls: bool = True
+    payment_webhook_url: str = ""
+    payment_webhook_secret: str = ""
+    document_encryption_key: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -66,6 +75,17 @@ class Settings:
             s3_endpoint_url=os.getenv("TRACKER_S3_ENDPOINT_URL", "").strip(),
             s3_sse=os.getenv("TRACKER_S3_SSE", "AES256").strip(),
             s3_kms_key_id=os.getenv("TRACKER_S3_KMS_KEY_ID", "").strip(),
+            smtp_host=os.getenv("TRACKER_SMTP_HOST", "").strip(),
+            smtp_port=int(os.getenv("TRACKER_SMTP_PORT", "587")),
+            smtp_username=os.getenv("TRACKER_SMTP_USERNAME", "").strip(),
+            smtp_password=os.getenv("TRACKER_SMTP_PASSWORD", ""),
+            smtp_from_email=os.getenv("TRACKER_SMTP_FROM_EMAIL", "").strip(),
+            smtp_starttls=_as_bool(os.getenv("TRACKER_SMTP_STARTTLS", "true")),
+            payment_webhook_url=os.getenv("TRACKER_PAYMENT_WEBHOOK_URL", "").strip(),
+            payment_webhook_secret=os.getenv("TRACKER_PAYMENT_WEBHOOK_SECRET", ""),
+            document_encryption_key=os.getenv(
+                "TRACKER_DOCUMENT_ENCRYPTION_KEY", ""
+            ).strip(),
         )
 
     @property

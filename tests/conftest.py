@@ -22,11 +22,18 @@ def postgres_url() -> str:
     with cleaner.connect() as connection:
         connection.execute(
             """TRUNCATE TABLE
-                   audit_events, activity_records, timesheets, work_session_segments,
+                   scheduled_reports, project_todos, global_todos, integrations,
+                   usage_records,
+                   location_events, geofences, holidays, work_breaks,
+                   notifications, payroll_payments, invoice_lines, invoices, expenses,
+                   time_off_requests, shifts, manual_time_entries, team_members, teams,
+                   clients, organization_settings, audit_events, activity_records,
+                   timesheets, work_session_segments,
                    work_sessions, tasks, invitations, devices, project_members,
                    projects, users
                RESTART IDENTITY CASCADE"""
         )
+        connection.execute("INSERT INTO organization_settings(id) VALUES (1)")
     cleaner.close()
     return value
 

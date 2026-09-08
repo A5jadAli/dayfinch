@@ -36,6 +36,12 @@ class ScreenshotStore(Protocol):
 
     def delete(self, key: str, version_id: str | None = None) -> None: ...
 
+    def save_blob(
+        self, key: str, data: bytes, content_type: str
+    ) -> StoredScreenshot: ...
+
+    def read_blob(self, key: str) -> bytes: ...
+
 
 def image_type(data: bytes) -> tuple[str, str]:
     for signature, result in ALLOWED_SIGNATURES.items():
@@ -62,7 +68,8 @@ def object_key(
 class LocalScreenshotStorage:
     def __init__(self, root: Path):
         self.root = root.resolve()
-        self.root.mkdir(parents=True, exist_ok=True)
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(self.root, 0o700)
 
     @staticmethod
     def extension_for(data: bytes) -> str:
@@ -74,14 +81,23 @@ class LocalScreenshotStorage:
         extension, _ = image_type(data)
         relative = object_key(device_id, record_id, captured_at, extension)
         destination = self._resolve(relative)
-        destination.parent.mkdir(parents=True, exist_ok=True)
+        self._ensure_private_parent(destination)
         temporary = destination.with_suffix(destination.suffix + ".part")
         with temporary.open("wb") as stream:
             stream.write(data)
             stream.flush()
             os.fsync(stream.fileno())
+        os.chmod(temporary, 0o600)
         os.replace(temporary, destination)
         return StoredScreenshot(relative)
+
+    def _ensure_private_parent(self, destination: Path) -> None:
+        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        current = destination.parent
+        while current != self.root:
+            os.chmod(current, 0o700)
+            current = current.parent
+        os.chmod(self.root, 0o700)
 
     def _resolve(self, key: str) -> Path:
         path = (self.root / key).resolve()
@@ -102,6 +118,24 @@ class LocalScreenshotStorage:
     def delete(self, key: str, version_id: str | None = None) -> None:
         del version_id
         self._resolve(key).unlink(missing_ok=True)
+
+    def save_blob(
+        self, key: str, data: bytes, content_type: str = "application/octet-stream"
+    ) -> StoredScreenshot:
+        del content_type
+        destination = self._resolve(key)
+        self._ensure_private_parent(destination)
+        temporary = destination.with_suffix(destination.suffix + ".part")
+        with temporary.open("wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, destination)
+        return StoredScreenshot(key)
+
+    def read_blob(self, key: str) -> bytes:
+        return self._resolve(key).read_bytes()
 
 
 class S3ScreenshotStorage:
@@ -152,6 +186,27 @@ class S3ScreenshotStorage:
         if version_id:
             arguments["VersionId"] = version_id
         self.client.delete_object(**arguments)
+
+    def save_blob(
+        self, key: str, data: bytes, content_type: str = "application/octet-stream"
+    ) -> StoredScreenshot:
+        arguments: dict[str, object] = {
+            "Bucket": self.bucket,
+            "Key": key,
+            "Body": io.BytesIO(data),
+            "ContentType": content_type,
+            "CacheControl": "private, no-store",
+        }
+        if self.sse:
+            arguments["ServerSideEncryption"] = self.sse
+        if self.sse == "aws:kms" and self.kms_key_id:
+            arguments["SSEKMSKeyId"] = self.kms_key_id
+        response = self.client.put_object(**arguments)
+        return StoredScreenshot(key, response.get("VersionId"))
+
+    def read_blob(self, key: str) -> bytes:
+        response = self.client.get_object(Bucket=self.bucket, Key=key)
+        return response["Body"].read()
 
 
 def create_storage(settings: Settings) -> ScreenshotStore:

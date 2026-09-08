@@ -4,6 +4,8 @@ import base64
 import hashlib
 import hmac
 import secrets
+import struct
+import time
 
 SCRYPT_N = 2**14
 SCRYPT_R = 8
@@ -49,6 +51,32 @@ def verify_password(password: str, encoded: str | None) -> bool:
             p=int(p),
             dklen=len(expected),
         )
-        return hmac.compare_digest(actual, expected)
     except (ValueError, TypeError):
         return False
+    return hmac.compare_digest(actual, expected)
+
+
+def generate_totp_secret() -> str:
+    return base64.b32encode(secrets.token_bytes(20)).decode().rstrip("=")
+
+
+def verify_totp(secret: str, code: str, *, at_time: int | None = None) -> bool:
+    if not secret or not code.isdigit() or len(code) != 6:
+        return False
+    padded = secret.upper() + "=" * ((8 - len(secret) % 8) % 8)
+    try:
+        key = base64.b32decode(padded)
+    except (ValueError, TypeError):
+        return False
+    counter = int(at_time or time.time()) // 30
+    for drift in (-1, 0, 1):
+        digest = hmac.new(
+            key, struct.pack(">Q", counter + drift), hashlib.sha1
+        ).digest()
+        offset = digest[-1] & 0x0F
+        value = (
+            struct.unpack(">I", digest[offset : offset + 4])[0] & 0x7FFFFFFF
+        ) % 1_000_000
+        if hmac.compare_digest(f"{value:06d}", code):
+            return True
+    return False

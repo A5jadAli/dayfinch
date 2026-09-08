@@ -6,6 +6,7 @@
   <h1 class="page-title mt-2">{{ project.name }}</h1>
   <p class="muted mt-1">{{ project.description or 'No description' }}</p>
 </div>
+{% if current_user.role in ['admin','manager'] %}<section class="card card-body mt-6"><div class="flex flex-wrap items-center justify-between gap-3"><div><p class="eyebrow">Controls</p><h2 class="section-title mt-1">Budget & billing</h2></div><span class="h-5 w-5 rounded-full" style="background:{{ project.color }}"></span></div><form method="post" action="/projects/{{ project.id }}/settings" class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input class="input" type="color" name="color" value="{{ project.color }}"><select class="input" name="budget_type"><option value="none" {{ 'selected' if project.budget_type == 'none' }}>No budget</option><option value="hours" {{ 'selected' if project.budget_type == 'hours' }}>Hour budget</option><option value="cost" {{ 'selected' if project.budget_type == 'cost' }}>Cost budget</option></select><input class="input" type="number" step=".01" name="budget_amount" value="{{ project.budget_amount }}" placeholder="Budget amount"><input class="input" type="number" name="budget_minutes" value="{{ project.budget_minutes }}" placeholder="Budget minutes"><input class="input" type="number" step=".01" name="billable_rate" value="{{ project.billable_rate }}" placeholder="Billable rate"><select class="input" name="client_id"><option value="">No client</option>{% for c in clients %}<option value="{{ c.id }}" {{ 'selected' if project.client_id == c.id }}>{{ c.name }}</option>{% endfor %}</select><button class="btn btn-primary sm:col-span-2 xl:col-span-6 xl:justify-self-start">Save project settings</button></form></section>{% endif %}
 
 <section class="card mt-6">
   <div class="card-header"><h2 class="section-title">Devices and captures</h2></div>
@@ -38,19 +39,20 @@
   {% if members %}
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Email</th><th>Status</th></tr></thead>
+      <thead><tr><th>Email</th><th>Status</th><th></th></tr></thead>
       <tbody>
         {% for member in members %}
         <tr>
           <td class="text-slate-900">{{ member.email }}</td>
           <td>{% if member.enabled %}<span class="badge badge-ok">Active</span>{% else %}<span class="badge badge-neutral">Invitation pending</span>{% endif %}</td>
+          <td>{% if current_user.role in ['admin','manager'] and member.id != current_user.id %}<form method="post" action="/projects/{{ project.id }}/members/{{ member.id }}/remove"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="btn btn-danger btn-sm">Remove</button></form>{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
     </table>
   </div>
   {% endif %}
-  {% if current_user.role == 'admin' and available_users %}
+  {% if current_user.role in ['admin','manager'] and available_users %}
   <form method="post" action="/projects/{{ project.id }}/members" class="flex flex-wrap items-center gap-2 border-t border-slate-200 px-5 py-4 sm:px-6">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <select class="input w-full sm:w-64" name="user_id" required>
@@ -67,7 +69,7 @@
   {% if tasks %}
   <div class="table-wrap">
     <table class="table">
-      <thead><tr><th>Task</th><th>Status</th><th>Billing</th><th>Agent task ID</th></tr></thead>
+      <thead><tr><th>Task</th><th>Status</th><th>Billing</th><th>Agent task ID</th><th></th></tr></thead>
       <tbody>
         {% for task in tasks %}
         <tr>
@@ -75,6 +77,7 @@
           <td><span class="badge badge-neutral">{{ task.status }}</span></td>
           <td>{{ 'Billable' if task.billable else 'Non-billable' }}</td>
           <td><code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">{{ task.id }}</code></td>
+          <td>{% if current_user.role in ['admin','manager'] %}<form method="post" action="/projects/{{ project.id }}/tasks/{{ task.id }}/status"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="task_status" value="{{ 'active' if task.status == 'archived' else 'archived' }}"><button class="btn btn-secondary btn-sm">{{ 'Restore' if task.status == 'archived' else 'Archive' }}</button></form>{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -83,7 +86,7 @@
   {% else %}
   <div class="empty"><p class="muted">No tasks yet. Tracking will be attributed to general project time.</p></div>
   {% endif %}
-  {% if current_user.role == 'admin' %}
+  {% if current_user.role in ['admin','manager'] %}
   <form method="post" action="/projects/{{ project.id }}/tasks" class="grid gap-4 border-t border-slate-200 px-5 py-5 sm:grid-cols-3 sm:px-6">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <label class="field">
@@ -105,6 +108,8 @@
   </form>
   {% endif %}
 </section>
+
+<section class="card mt-6"><div class="card-header"><div><h2 class="section-title">To-dos</h2><p class="muted">Track deliverables independently from timer tasks.</p></div></div>{% if todos %}<div class="divide-y divide-slate-100">{% for todo in todos %}<div class="flex items-center gap-3 px-5 py-4"><form method="post" action="/projects/{{ project.id }}/todos/{{ todo.id }}/complete"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="complete" value="{{ 0 if todo.completed_at else 1 }}"><button class="grid h-6 w-6 place-items-center rounded-full border {{ 'border-emerald-500 bg-emerald-500 text-white' if todo.completed_at else 'border-slate-300 bg-white' }}">{{ '✓' if todo.completed_at else '' }}</button></form><div><p class="font-medium {{ 'text-slate-400 line-through' if todo.completed_at else 'text-slate-900' }}">{{ todo.name }}</p><p class="text-xs text-slate-500">{{ todo.description or 'No description' }}</p></div></div>{% endfor %}</div>{% endif %}<form method="post" action="/projects/{{ project.id }}/todos" class="grid gap-3 border-t border-slate-100 p-5 sm:grid-cols-[1fr_1fr_auto]"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input class="input" name="name" placeholder="Add a to-do" required><input class="input" name="description" placeholder="Description"><input type="hidden" name="add_to_future_projects" value="0"><button class="btn btn-primary">Add to-do</button></form></section>
 
 <section class="card mt-6">
   <div class="card-header"><h2 class="section-title">Work sessions</h2></div>

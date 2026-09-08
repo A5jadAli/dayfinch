@@ -16,6 +16,7 @@ from .repositories.devices import DevicesRepository
 from .repositories.projects import ProjectsRepository
 from .repositories.timesheets import TimesheetRepository
 from .repositories.work import WorkRepository
+from .repositories.workforce import WorkforceRepository
 
 
 def normalized_dict_row(cursor):
@@ -42,6 +43,7 @@ class Database(
     AuditRepository,
     WorkRepository,
     TimesheetRepository,
+    WorkforceRepository,
 ):
     """PostgreSQL connection-pool owner and repository facade."""
 

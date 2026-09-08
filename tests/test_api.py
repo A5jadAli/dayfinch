@@ -15,6 +15,7 @@ def test_agent_authentication_and_idempotent_upload(tmp_path, postgres_url):
         database_url=postgres_url,
     )
     app = create_app(settings)
+    assert app.version == "0.6.0"
     with TestClient(app) as client:
         database = app.state.database
         device, token = database.create_device("Test laptop")

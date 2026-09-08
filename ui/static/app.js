@@ -1,0 +1,1 @@
+(() => { const menu=document.getElementById('sidebar'),button=document.getElementById('menuButton'); if(!menu||!button)return; button.addEventListener('click',()=>{menu.classList.toggle('hidden');menu.classList.toggle('flex')}); })();

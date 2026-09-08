@@ -13,7 +13,7 @@ def timesheets_page(request: Request):
     if redirect:
         return redirect
     user = web.require_user(request)
-    owner_filter = None if user["role"] == "admin" else user["id"]
+    owner_filter = None if user["role"] in {"admin", "manager"} else user["id"]
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="timesheets.html",
@@ -38,7 +38,7 @@ def submit_timesheet(
     try:
         request.app.state.timesheets.submit(user, period_start, period_end)
     except ValueError as exc:
-        owner_filter = None if user["role"] == "admin" else user["id"]
+        owner_filter = None if user["role"] in {"admin", "manager"} else user["id"]
         return request.app.state.templates.TemplateResponse(
             request=request,
             name="timesheets.html",
@@ -49,6 +49,25 @@ def submit_timesheet(
             ),
             status_code=400,
         )
+    return RedirectResponse("/timesheets", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/{timesheet_id}/submit")
+def submit_generated_timesheet(
+    request: Request, timesheet_id: str, csrf: Annotated[str, Form()]
+):
+    web = request.app.state.web
+    user = web.require_user(request)
+    web.require_csrf(request, csrf)
+    sheet = request.app.state.database.get_timesheet(timesheet_id)
+    if not sheet or sheet["user_id"] != user["id"]:
+        raise HTTPException(status_code=404, detail="Timesheet not found")
+    try:
+        request.app.state.timesheets.submit(
+            user, str(sheet["period_start"]), str(sheet["period_end"])
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return RedirectResponse("/timesheets", status_code=status.HTTP_303_SEE_OTHER)
 
 

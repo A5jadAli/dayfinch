@@ -1,0 +1,12 @@
+{
+  "name": "Dayfinch Field Tracker",
+  "short_name": "Dayfinch",
+  "description": "Project time and job-site location tracking for Dayfinch teams.",
+  "start_url": "/field",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#6857e5",
+  "icons": [
+    {"src": "/static/dayfinch-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+  ]
+}

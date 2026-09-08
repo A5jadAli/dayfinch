@@ -13,7 +13,11 @@ def test_storage_accepts_images_and_confines_paths(tmp_path):
         datetime.now(UTC),
         b"\xff\xd8\xfffake-jpeg",
     )
-    assert storage.resolve(stored.key).read_bytes() == b"\xff\xd8\xfffake-jpeg"
+    path = storage.resolve(stored.key)
+    assert path.read_bytes() == b"\xff\xd8\xfffake-jpeg"
+    assert path.stat().st_mode & 0o777 == 0o600
+    assert path.parent.stat().st_mode & 0o777 == 0o700
+    assert storage.root.stat().st_mode & 0o777 == 0o700
     assert storage.read(stored.key).content_type == "image/jpeg"
     with pytest.raises(ValueError):
         storage.resolve("../../secret.txt")

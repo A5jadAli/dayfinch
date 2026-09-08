@@ -8,6 +8,31 @@ from .base import RepositoryMixin, utc_now
 
 
 class ActivityRepository(RepositoryMixin):
+    def add_usage_record(self, record: dict[str, Any]) -> bool:
+        try:
+            with self.connect() as connection:
+                connection.execute(
+                    """INSERT INTO usage_records(
+                           id,device_id,user_id,project_id,task_id,session_id,
+                           observed_at,active_app,active_url,focused_seconds
+                       ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                    (
+                        record["id"],
+                        record["device_id"],
+                        record.get("user_id"),
+                        record.get("project_id"),
+                        record.get("task_id"),
+                        record.get("session_id"),
+                        record["observed_at"],
+                        record.get("active_app"),
+                        record.get("active_url"),
+                        record.get("focused_seconds", 0),
+                    ),
+                )
+            return True
+        except UniqueViolation:
+            return False
+
     def record_exists(self, record_id: str) -> bool:
         with self.connect() as connection:
             row = connection.execute(
@@ -24,8 +49,9 @@ class ActivityRepository(RepositoryMixin):
                            mouse_clicks, mouse_distance, active_app, agent_version,
                            screenshot_path, storage_version_id, focused_seconds,
                            interactive_seconds, user_id, project_id, task_id, session_id,
-                           active_url, automation_suspected
-                       ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                           active_url, automation_suspected, activity_percent,
+                           screenshot_blurred, source
+                       ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
                     (
                         record["id"],
                         record["device_id"],
@@ -46,6 +72,9 @@ class ActivityRepository(RepositoryMixin):
                         record.get("session_id"),
                         record.get("active_url") or None,
                         record.get("automation_suspected", False),
+                        record.get("activity_percent", 0),
+                        record.get("screenshot_blurred", False),
+                        record.get("source", "desktop"),
                     ),
                 )
             return True

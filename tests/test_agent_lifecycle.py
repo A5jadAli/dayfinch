@@ -1,4 +1,7 @@
 import signal
+import sqlite3
+import threading
+import time
 from io import BytesIO
 
 import httpx
@@ -89,6 +92,43 @@ def test_stop_is_idempotent_so_shutdown_always_closes_the_session(tmp_path):
     agent.stop()
 
     assert sent == ["stopped"]
+
+
+def test_journal_failure_does_not_kill_worker_and_shutdown_still_closes_client(
+    tmp_path, monkeypatch
+):
+    agent = TrackerAgent(_config(tmp_path))
+    closed = []
+    agent.client = type(
+        "Client",
+        (),
+        {
+            "close": lambda _self: closed.append(True),
+        },
+    )()
+    monkeypatch.setattr(
+        agent.queue,
+        "add_state",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            sqlite3.OperationalError("disk full")
+        ),
+    )
+    monkeypatch.setattr(
+        agent.queue,
+        "add_usage",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            sqlite3.OperationalError("disk full")
+        ),
+    )
+    worker = threading.Thread(target=agent._work_loop, daemon=True)
+    agent._worker = worker
+    worker.start()
+    time.sleep(0.7)
+
+    assert worker.is_alive()
+    assert "not saved" in agent.status
+    agent.stop()
+    assert closed == [True]
 
 
 @pytest.mark.parametrize("name", ["SIGTERM", "SIGINT"])

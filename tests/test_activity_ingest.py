@@ -98,3 +98,20 @@ def test_suspected_automation_zeroes_interactive_time_server_side(
         # The raw screenshot and counts are kept as evidence; only the derived
         # interaction time is neutralized.
         assert record["keyboard_events"] == 5
+
+
+def test_server_rejects_capture_when_screenshot_policy_is_disabled(
+    tmp_path, postgres_url
+):
+    app = create_app(_settings(tmp_path, postgres_url))
+    with TestClient(app) as client:
+        database = app.state.database
+        token = _enrolled_device(database)
+        database.update_organization_settings({"screenshot_frequency": 0})
+        rid = "6f9619ff-8b86-d011-b42d-00cf4fc964bb"
+
+        response = _post_activity(client, token, rid)
+
+        assert response.status_code == 403
+        assert database.get_record(rid) is None
+        assert not list(tmp_path.rglob("*.jpg"))

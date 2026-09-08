@@ -6,7 +6,7 @@ from typing import Annotated
 from fastapi import APIRouter, Form, HTTPException, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from ..security import hash_password, verify_password
+from ..security import generate_totp_secret, hash_password, verify_password, verify_totp
 from ..web import normalize_email
 
 router = APIRouter(tags=["authentication"])
@@ -56,10 +56,115 @@ def login(
             status_code=401,
         )
     request.session.clear()
-    request.session["user_id"] = user["id"]
     request.session["csrf_token"] = secrets.token_urlsafe(24)
+    policy = database.organization_settings()
+    if user.get("two_factor_enabled") or policy["require_two_factor"]:
+        request.session["preauth_user_id"] = user["id"]
+        return RedirectResponse(
+            "/two-factor" if user.get("totp_secret") else "/two-factor/setup",
+            status_code=status.HTTP_303_SEE_OTHER,
+        )
+    request.session["user_id"] = user["id"]
     database.add_audit_event(
         user["id"], "auth.login", "user", user["id"], user["email"]
+    )
+    return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+
+
+def _preauth_user(request: Request):
+    user_id = request.session.get("preauth_user_id")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Sign in with your password first")
+    user = request.app.state.database.get_user(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Account is unavailable")
+    return user
+
+
+@router.get("/two-factor", response_class=HTMLResponse)
+def two_factor_page(request: Request):
+    _preauth_user(request)
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="two_factor.html",
+        context=request.app.state.web.page_context(request, error=None),
+    )
+
+
+@router.post("/two-factor", response_class=HTMLResponse)
+def two_factor_verify(
+    request: Request,
+    code: Annotated[str, Form()],
+    csrf: Annotated[str, Form()],
+):
+    user = _preauth_user(request)
+    request.app.state.web.require_csrf(request, csrf)
+    if not verify_totp(user.get("totp_secret") or "", code.strip()):
+        request.app.state.database.add_audit_event(
+            user["id"], "auth.two_factor_failed", "user", user["id"]
+        )
+        return request.app.state.templates.TemplateResponse(
+            request=request,
+            name="two_factor.html",
+            context=request.app.state.web.page_context(
+                request, error="The authentication code is invalid or expired."
+            ),
+            status_code=401,
+        )
+    request.session.pop("preauth_user_id", None)
+    request.session["user_id"] = user["id"]
+    request.app.state.database.add_audit_event(
+        user["id"], "auth.two_factor", "user", user["id"]
+    )
+    return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/two-factor/setup", response_class=HTMLResponse)
+def two_factor_setup_page(request: Request):
+    user = _preauth_user(request)
+    secret = user.get("totp_secret") or generate_totp_secret()
+    if not user.get("totp_secret"):
+        request.app.state.database.set_two_factor_secret(
+            user["id"], secret, enabled=False
+        )
+    uri = f"otpauth://totp/Dayfinch:{user['email']}?secret={secret}&issuer=Dayfinch"
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="two_factor_setup.html",
+        context=request.app.state.web.page_context(
+            request, secret=secret, provisioning_uri=uri, error=None
+        ),
+    )
+
+
+@router.post("/two-factor/setup", response_class=HTMLResponse)
+def two_factor_setup(
+    request: Request,
+    code: Annotated[str, Form()],
+    csrf: Annotated[str, Form()],
+):
+    user = _preauth_user(request)
+    request.app.state.web.require_csrf(request, csrf)
+    if not verify_totp(user.get("totp_secret") or "", code.strip()):
+        uri = f"otpauth://totp/Dayfinch:{user['email']}?secret={user.get('totp_secret', '')}&issuer=Dayfinch"
+        return request.app.state.templates.TemplateResponse(
+            request=request,
+            name="two_factor_setup.html",
+            context=request.app.state.web.page_context(
+                request,
+                secret=user.get("totp_secret", ""),
+                provisioning_uri=uri,
+                error="Enter the current six-digit code to finish setup.",
+            ),
+            status_code=400,
+        )
+    request.app.state.database.set_two_factor_secret(
+        user["id"], user["totp_secret"], enabled=True
+    )
+    request.session.pop("preauth_user_id", None)
+    request.session["user_id"] = user["id"]
+    request.app.state.database.add_audit_event(
+        user["id"], "auth.two_factor_enabled", "user", user["id"]
     )
     return RedirectResponse("/", status_code=status.HTTP_303_SEE_OTHER)
 

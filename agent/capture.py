@@ -9,7 +9,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 from urllib.request import url2pathname
 
-from PIL import Image
+from PIL import Image, ImageFilter
 
 
 class CaptureUnavailable(RuntimeError):
@@ -177,3 +177,10 @@ def _as_jpeg(image: Image.Image, jpeg_quality: int, max_dimension: int = 0) -> b
     # optimize=True costs roughly twice the CPU for a few percent of size.
     downscale(image, max_dimension).save(output, format="JPEG", quality=jpeg_quality)
     return output.getvalue()
+
+
+def blur_screenshot(data: bytes, jpeg_quality: int = 65) -> bytes:
+    """Irreversibly obscure text and fine detail before a capture leaves the device."""
+    with Image.open(BytesIO(data)) as image:
+        blurred = image.convert("RGB").filter(ImageFilter.GaussianBlur(radius=12))
+        return _as_jpeg(blurred, jpeg_quality)

@@ -118,6 +118,12 @@ def delete_screenshot(
     database = request.app.state.database
     user = web.require_user(request)
     web.require_csrf(request, csrf)
+    policy = database.organization_settings()
+    if (
+        user["role"] not in {"admin", "manager"}
+        and not policy["allow_screenshot_delete"]
+    ):
+        raise HTTPException(status_code=403, detail="Screenshot deletion is disabled")
     record = database.get_record(record_id)
     if not record or not web.can_access_record(user, record):
         raise HTTPException(status_code=404, detail="Screenshot not found")

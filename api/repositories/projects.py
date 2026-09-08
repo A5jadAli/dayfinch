@@ -26,6 +26,12 @@ class ProjectsRepository(RepositoryMixin):
                        VALUES (%s, %s, %s, %s, %s)""",
                     tuple(project.values()),
                 )
+                connection.execute(
+                    """INSERT INTO project_todos(todo_id,project_id)
+                       SELECT id,%s FROM global_todos WHERE add_to_future_projects=TRUE AND active=TRUE
+                       ON CONFLICT DO NOTHING""",
+                    (project["id"],),
+                )
         except UniqueViolation as exc:
             raise ValueError("A project with that name already exists") from exc
         return project
@@ -65,6 +71,20 @@ class ProjectsRepository(RepositoryMixin):
                 """INSERT INTO project_members(project_id, user_id, added_at)
                    VALUES (%s, %s, %s) ON CONFLICT DO NOTHING""",
                 (project_id, user_id, utc_now()),
+            )
+
+    def remove_project_member(self, project_id: str, user_id: str) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "DELETE FROM project_members WHERE project_id=%s AND user_id=%s",
+                (project_id, user_id),
+            )
+
+    def set_project_enabled(self, project_id: str, enabled: bool) -> None:
+        with self.connect() as connection:
+            connection.execute(
+                "UPDATE projects SET enabled=%s,archived_at=CASE WHEN %s THEN NULL ELSE CURRENT_TIMESTAMP END WHERE id=%s",
+                (enabled, enabled, project_id),
             )
 
     def is_project_member(self, project_id: str, user_id: str) -> bool:

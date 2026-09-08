@@ -61,7 +61,7 @@ class WebSecurity:
 
     def require_admin(self, request: Request) -> dict[str, Any]:
         user = self.require_user(request)
-        if user["role"] != "admin":
+        if user["role"] not in {"admin", "manager"}:
             raise HTTPException(status_code=403, detail="Administrator access required")
         return user
 
@@ -70,18 +70,32 @@ class WebSecurity:
             return RedirectResponse("/login", status_code=status.HTTP_303_SEE_OTHER)
         return None
 
-    @staticmethod
-    def can_access_device(user: dict[str, Any], device: dict[str, Any]) -> bool:
-        return user["role"] == "admin" or device.get("owner_user_id") == user["id"]
+    def can_access_device(self, user: dict[str, Any], device: dict[str, Any]) -> bool:
+        return (
+            user["role"] in {"admin", "manager"}
+            or device.get("owner_user_id") == user["id"]
+            or (
+                user["role"] == "viewer"
+                and device.get("project_id")
+                and self.database.is_project_member(device["project_id"], user["id"])
+            )
+        )
 
     def can_access_project(self, user: dict[str, Any], project_id: str) -> bool:
-        return user["role"] == "admin" or self.database.is_project_member(
+        return user["role"] in {"admin", "manager"} or self.database.is_project_member(
             project_id, user["id"]
         )
 
-    @staticmethod
-    def can_access_record(user: dict[str, Any], record: dict[str, Any]) -> bool:
-        return user["role"] == "admin" or record.get("owner_user_id") == user["id"]
+    def can_access_record(self, user: dict[str, Any], record: dict[str, Any]) -> bool:
+        return (
+            user["role"] in {"admin", "manager"}
+            or record.get("owner_user_id") == user["id"]
+            or (
+                user["role"] == "viewer"
+                and record.get("project_id")
+                and self.database.is_project_member(record["project_id"], user["id"])
+            )
+        )
 
     def authenticate_device(self, authorization: str | None) -> dict[str, Any]:
         scheme, _, token = (authorization or "").partition(" ")
