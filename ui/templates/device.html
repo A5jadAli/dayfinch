@@ -7,12 +7,12 @@
     <h1 class="page-title mt-2">{{ device.name }}</h1>
     <div class="muted mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
       <span>{{ device.owner_email or 'Unassigned' }}</span>
-      <span class="text-slate-300">/</span>
+      <span class="text-faint">/</span>
       <span>{{ device.project_name or 'No project' }}</span>
-      <span class="text-slate-300">/</span>
+      <span class="text-faint">/</span>
       <span class="max-w-[22rem] truncate">{{ device.platform or 'Platform not reported' }}</span>
     </div>
-    <p class="mt-1 text-sm text-slate-500">Last seen {{ (device.last_seen_at[:19] | replace('T', ' ')) if device.last_seen_at else 'never' }}</p>
+    <p class="mt-1 text-sm text-muted">Last seen {{ (device.last_seen_at[:19] | replace('T', ' ')) if device.last_seen_at else 'never' }}</p>
   </div>
   <form method="post" action="/devices/{{ device.id }}/enabled">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
@@ -21,33 +21,33 @@
   </form>
 </div>
 
-<div class="notice mt-6">
+<div class="notice mt-6"><svg class="icon icon-sm mt-px"><use href="#i-alert"></use></svg><span>
   Deleting a capture permanently removes its screenshot and the keyboard and mouse activity recorded for that
-  interval.
+  interval.</span>
 </div>
 
 {% if records %}
-<div class="mt-6 grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+<div data-stagger-items class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
   {% for record in records %}
-  <article class="card overflow-hidden transition hover:border-slate-300">
+  <article class="capture-card">
     <a href="/screenshots/{{ record.id }}" target="_blank" rel="noopener" class="block">
-      <img class="aspect-video w-full bg-slate-100 object-cover" loading="lazy" src="/screenshots/{{ record.id }}" alt="Screenshot captured {{ record.captured_at }}">
+      <img class="aspect-video w-full bg-sunken object-cover" loading="lazy" src="/screenshots/{{ record.id }}" alt="Screenshot captured {{ record.captured_at }}">
     </a>
     <div class="grid gap-2.5 p-4">
       <div>
-        <p class="text-sm font-medium text-slate-900 tabular-nums">{{ (record.captured_at[:19] | replace('T', ' ')) if record.captured_at else '' }}</p>
-        <p class="mt-0.5 truncate text-sm text-slate-600">{{ record.active_app or 'Application not available' }}</p>
-        {% if record.active_url %}<p class="mt-0.5 truncate text-sm text-brand-700">{{ record.active_url }}</p>{% endif %}
+        <p class="text-sm font-medium text-ink tabular-nums">{{ (record.captured_at[:19] | replace('T', ' ')) if record.captured_at else '' }}</p>
+        <p class="mt-0.5 truncate text-sm text-muted">{{ record.active_app or 'Application not available' }}</p>
+        {% if record.active_url %}<p class="mt-0.5 truncate text-sm text-brand-ink">{{ record.active_url }}</p>{% endif %}
       </div>
       {% if record.automation_suspected %}
       <p class="badge badge-warn w-fit">Input anomaly: interaction excluded</p>
       {% endif %}
-      <div class="flex flex-wrap gap-1.5 text-xs text-slate-600">
-        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.focused_seconds }}s focus</span>
-        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.interactive_seconds }}s interaction</span>
-        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.keyboard_events }} keys</span>
-        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.mouse_clicks }} clicks</span>
-        <span class="rounded bg-slate-100 px-1.5 py-0.5 tabular-nums">{{ record.mouse_distance }} px</span>
+      <div class="flex flex-wrap gap-1.5 text-xs text-muted">
+        <span class="rounded bg-sunken px-1.5 py-0.5 tabular-nums">{{ record.focused_seconds }}s focus</span>
+        <span class="rounded bg-sunken px-1.5 py-0.5 tabular-nums">{{ record.interactive_seconds }}s interaction</span>
+        <span class="rounded bg-sunken px-1.5 py-0.5 tabular-nums">{{ record.keyboard_events }} keys</span>
+        <span class="rounded bg-sunken px-1.5 py-0.5 tabular-nums">{{ record.mouse_clicks }} clicks</span>
+        <span class="rounded bg-sunken px-1.5 py-0.5 tabular-nums">{{ record.mouse_distance }} px</span>
       </div>
       <form method="post" action="/screenshots/{{ record.id }}/delete" onsubmit="return confirm('Permanently delete this screenshot and its complete activity interval?');">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
@@ -60,6 +60,7 @@
 {% else %}
 <section class="card mt-6">
   <div class="empty">
+    <svg viewBox="0 0 100 100" class="empty-art h-10 w-10"><use href="#i-shape-star"></use></svg>
     <h2 class="section-title">No captures received</h2>
     <p class="muted mt-1">Start the enrolled agent and keep this page private.</p>
   </div>

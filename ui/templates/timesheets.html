@@ -17,7 +17,7 @@
       <span class="field-label">Through</span>
       <input class="input w-full sm:w-40" type="date" name="period_end" required>
     </label>
-    <button class="btn btn-primary w-full sm:w-auto" type="submit">Submit period</button>
+    <button class="btn btn-primary w-full sm:w-auto" type="submit"><svg class="icon icon-sm"><use href="#i-check"></use></svg> Submit period</button>
   </form>
 </div>
 
@@ -39,12 +39,12 @@
       <tbody>
         {% for sheet in timesheets %}
         <tr>
-          {% if current_user.role in ['admin','manager'] %}<td class="text-slate-900">{{ sheet.email }}</td>{% endif %}
+          {% if current_user.role in ['admin','manager'] %}<td class="text-ink">{{ sheet.email }}</td>{% endif %}
           <td>{{ sheet.period_start }} to {{ sheet.period_end }}</td>
-          {% set total_seconds=sheet.tracked_seconds+sheet.manual_seconds+sheet.pto_seconds+sheet.holiday_seconds %}<td class="text-right tabular-nums"><strong>{{ total_seconds//3600 }}h {{ (total_seconds%3600)//60 }}m</strong><div class="text-xs text-slate-400">{{ sheet.activity_percent }}% activity · {{ sheet.manual_seconds//60 }}m manual · {{ sheet.pto_seconds//60 }}m PTO</div>{% if current_user.role in ['admin','manager'] %}<div class="text-xs text-slate-400">Estimated {{ '%.2f'|format(total_seconds*(sheet.pay_rate|float)/3600) }}</div>{% endif %}</td>
+          {% set total_seconds=sheet.tracked_seconds+sheet.manual_seconds+sheet.pto_seconds+sheet.holiday_seconds %}<td class="text-right tabular-nums"><strong>{{ total_seconds//3600 }}h {{ (total_seconds%3600)//60 }}m</strong><div class="text-xs text-faint">{{ sheet.activity_percent }}% activity · {{ sheet.manual_seconds//60 }}m manual · {{ sheet.pto_seconds//60 }}m PTO</div>{% if current_user.role in ['admin','manager'] %}<div class="text-xs text-faint">Estimated {{ '%.2f'|format(total_seconds*(sheet.pay_rate|float)/3600) }}</div>{% endif %}</td>
           <td>
             <span class="badge {{ 'badge-ok' if sheet.status == 'approved' else 'badge-off' if sheet.status == 'rejected' else 'badge-neutral' }}">{{ sheet.status }}</span>
-            {% if sheet.review_note %}<div class="mt-1 max-w-xs text-xs whitespace-normal text-slate-500">{{ sheet.review_note }}</div>{% endif %}
+            {% if sheet.review_note %}<div class="mt-1 max-w-xs text-xs whitespace-normal text-muted">{{ sheet.review_note }}</div>{% endif %}
           </td>
           <td>
             {% if sheet.status == 'open' and sheet.user_id == current_user.id %}<form method="post" action="/timesheets/{{ sheet.id }}/submit"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="btn btn-primary btn-sm">Submit</button></form>{% elif current_user.role in ['admin','manager'] and sheet.status == 'submitted' %}
@@ -55,7 +55,7 @@
               <button class="btn btn-danger btn-sm" name="decision" value="rejected" type="submit">Reject</button>
             </form>
             {% else %}
-            <span class="text-slate-400">Not reviewed</span>
+            <span class="text-faint">Not reviewed</span>
             {% endif %}
           </td>
         </tr>
@@ -65,6 +65,7 @@
   </div>
   {% else %}
   <div class="empty">
+    <svg viewBox="0 0 100 100" class="empty-art h-10 w-10"><use href="#i-shape-petal"></use></svg>
     <h2 class="section-title">No timesheets yet</h2>
     <p class="muted mt-1">Submit a completed period to begin the approval workflow.</p>
   </div>

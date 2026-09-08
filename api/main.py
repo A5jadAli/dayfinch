@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
@@ -32,6 +33,21 @@ from .web import WebSecurity
 
 PACKAGE_DIR = Path(__file__).resolve().parent
 UI_DIR = PACKAGE_DIR.parent / "ui"
+
+
+def _asset_version() -> str:
+    digest = hashlib.sha256()
+    for name in (
+        "app.css",
+        "app.js",
+        "dayfinch-icon.svg",
+        "field.js",
+        "manifest.webmanifest",
+        "service-worker.js",
+    ):
+        digest.update(name.encode())
+        digest.update((UI_DIR / "static" / name).read_bytes())
+    return digest.hexdigest()[:12]
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -79,7 +95,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.invoice_vault = invoice_vault
     app.state.web = WebSecurity(database)
     app.state.timesheets = TimesheetService(database)
-    app.state.templates = Jinja2Templates(directory=UI_DIR / "templates")
+    templates = Jinja2Templates(directory=UI_DIR / "templates")
+    asset_version = _asset_version()
+    templates.env.globals["asset_version"] = asset_version
+    app.state.templates = templates
+    app.state.asset_version = asset_version
     app.state.dummy_password_hash = hash_password("invalid-password-for-timing-only")
     app.add_middleware(
         SessionMiddleware,
@@ -92,11 +112,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.mount("/static", StaticFiles(directory=UI_DIR / "static"), name="static")
 
     @app.get("/service-worker.js", include_in_schema=False)
-    def service_worker() -> FileResponse:
-        return FileResponse(
-            UI_DIR / "static" / "service-worker.js",
+    def service_worker() -> Response:
+        source = (UI_DIR / "static" / "service-worker.js").read_text()
+        return Response(
+            source.replace("__DAYFINCH_ASSET_VERSION__", asset_version),
             media_type="application/javascript",
-            headers={"Service-Worker-Allowed": "/"},
+            headers={
+                "Service-Worker-Allowed": "/",
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+            },
         )
 
     app.include_router(auth_router)

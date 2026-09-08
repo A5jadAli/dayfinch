@@ -17,6 +17,16 @@ def test_agent_authentication_and_idempotent_upload(tmp_path, postgres_url):
     app = create_app(settings)
     assert app.version == "0.6.0"
     with TestClient(app) as client:
+        login_page = client.get("/login")
+        assert f"/static/app.css?v={app.state.asset_version}" in login_page.text
+        assert f"/static/app.js?v={app.state.asset_version}" in login_page.text
+        service_worker = client.get("/service-worker.js")
+        assert service_worker.status_code == 200
+        assert app.state.asset_version in service_worker.text
+        assert "__DAYFINCH_ASSET_VERSION__" not in service_worker.text
+        assert service_worker.headers["cache-control"] == (
+            "no-cache, no-store, must-revalidate"
+        )
         database = app.state.database
         device, token = database.create_device("Test laptop")
         payload = {

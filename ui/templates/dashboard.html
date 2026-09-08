@@ -1,17 +1,233 @@
 {% extends "base.html" %}{% block title %}Dashboard · Dayfinch{% endblock %}{% block content %}
-<div class="flex flex-wrap items-end justify-between gap-4"><div><p class="eyebrow">Workforce overview</p><h1 class="page-title mt-1">Dashboard</h1><p class="muted mt-1">Live time, activity, budgets, and approvals in one place.</p></div><div class="flex gap-2"><a class="btn btn-secondary" href="/activity">View activity</a><a class="btn btn-primary" href="/time-entries">＋ Add time</a></div></div>
-<section class="card card-body mt-6 border-brand-200 bg-gradient-to-r from-white to-brand-50/40"><div class="flex flex-wrap items-center justify-between gap-4"><div><p class="eyebrow">Web timer</p>{% if active_timer %}<h2 class="mt-1 text-lg font-bold text-slate-950">{{ active_timer.project_name }}{% if active_timer.task_name %} · {{ active_timer.task_name }}{% endif %}</h2><p class="muted">{{ active_timer.status|title }} · {{ active_timer.tracked_seconds // 3600 }}h {{ (active_timer.tracked_seconds % 3600)//60 }}m</p>{% else %}<h2 class="mt-1 text-lg font-bold text-slate-950">Start tracking from this browser</h2><p class="muted">Web time has no screenshots or input activity.</p>{% endif %}</div>{% if active_timer %}<div class="flex gap-2"><form method="post" action="/timer/{{ 'resume' if active_timer.status == 'paused' else 'pause' }}"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="btn btn-secondary">{{ '▶ Resume' if active_timer.status == 'paused' else 'Ⅱ Break' }}</button></form><form method="post" action="/timer/stop"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="btn btn-danger">■ Stop timer</button></form></div>{% else %}<form method="post" action="/timer/start" class="flex flex-wrap gap-2"><input type="hidden" name="csrf" value="{{ csrf_token }}"><select class="input w-52" name="project_id" required><option value="">Select project</option>{% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select><button class="btn btn-primary">▶ Start timer</button></form>{% endif %}</div></section>
-<section class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-  <article class="metric-card"><span class="metric-icon bg-violet-50 text-violet-600">◷</span><div><p class="metric-label">Tracked this week</p><p class="metric-value">{{ (summary.tracked_seconds // 3600) }}<small>h</small> {{ ((summary.tracked_seconds % 3600) // 60) }}<small>m</small></p><p class="metric-note">Across {{ summary.tracked_members }} team members</p></div></article>
-  <article class="metric-card"><span class="metric-icon bg-emerald-50 text-emerald-600">↗</span><div><p class="metric-label">Average activity</p><p class="metric-value">{{ summary.activity_percent }}<small>%</small></p><p class="metric-note">{{ summary.screenshot_count }} captured intervals</p></div></article>
-  <article class="metric-card"><span class="metric-icon bg-sky-50 text-sky-600">●</span><div><p class="metric-label">Working now</p><p class="metric-value">{{ summary.active_members }}</p><p class="metric-note">Live desktop sessions</p></div></article>
-  <article class="metric-card"><span class="metric-icon bg-amber-50 text-amber-600">✓</span><div><p class="metric-label">Needs review</p><p class="metric-value">{{ summary.pending.timesheets + summary.pending.manual_time + summary.pending.time_off + summary.pending.expenses }}</p><p class="metric-note">Time, leave, and expenses</p></div></article>
-</section>
-<div class="mt-6 grid gap-6 xl:grid-cols-[1.45fr_1fr]">
-<section class="card"><div class="card-header"><div><h2 class="section-title">Recent time</h2><p class="muted">Latest sessions across your workspace</p></div><a class="link" href="/time-entries">All time →</a></div>
-{% if summary.recent %}<div class="table-wrap"><table class="table"><thead><tr><th>Member</th><th>Project / task</th><th>Status</th><th class="text-right">Duration</th></tr></thead><tbody>{% for row in summary.recent %}<tr><td><div class="font-medium text-slate-900">{{ row.full_name or row.email or 'Unassigned' }}</div><div class="text-xs text-slate-400">{{ row.started_at[:16] | replace('T',' ') }}</div></td><td><div>{{ row.project_name or 'No project' }}</div><div class="text-xs text-slate-400">{{ row.task_name or 'General time' }}</div></td><td><span class="badge {{ 'badge-ok' if row.status == 'active' else 'badge-neutral' }}">{{ row.status }}</span></td><td class="text-right font-medium tabular-nums">{{ row.tracked_seconds // 3600 }}h {{ (row.tracked_seconds % 3600) // 60 }}m</td></tr>{% endfor %}</tbody></table></div>{% else %}<div class="empty">No tracked time yet. Enroll the desktop app to begin.</div>{% endif %}</section>
-<section class="card"><div class="card-header"><div><h2 class="section-title">Approval inbox</h2><p class="muted">Items waiting for a decision</p></div></div><div class="grid gap-3 p-5"><a class="approval-row" href="/timesheets"><span>Timesheets</span><strong>{{ summary.pending.timesheets }}</strong></a><a class="approval-row" href="/time-entries"><span>Manual time</span><strong>{{ summary.pending.manual_time }}</strong></a><a class="approval-row" href="/schedules"><span>Time off</span><strong>{{ summary.pending.time_off }}</strong></a><a class="approval-row" href="/financials"><span>Expenses</span><strong>{{ summary.pending.expenses }}</strong></a></div></section>
+
+<div class="flex flex-wrap items-end justify-between gap-4">
+  <div>
+    <p class="eyebrow">Workforce overview</p>
+    <h1 class="page-title mt-1.5">Dashboard</h1>
+    <p class="muted mt-1.5">Live time, activity, budgets, and approvals in one place.</p>
+  </div>
+  <div class="flex gap-2">
+    <a class="btn btn-secondary" href="/activity"><svg class="icon icon-sm"><use href="#i-camera"></use></svg> View activity</a>
+    <a class="btn btn-primary" href="/time-entries"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> Add time</a>
+  </div>
 </div>
-<section id="projects" class="card mt-6"><div class="card-header"><div><h2 class="section-title">Projects & budgets</h2><p class="muted">Current allocation and weekly tracked time</p></div></div>{% if projects %}<div class="grid gap-px bg-slate-100 sm:grid-cols-2 xl:grid-cols-3">{% for project in projects %}<a href="/projects/{{ project.id }}" class="bg-white p-5 transition hover:bg-slate-50"><div class="flex items-center justify-between"><span class="h-2.5 w-2.5 rounded-full" style="background:{{ project.color }}"></span><span class="text-xs text-slate-400">{{ project.member_count }} members</span></div><h3 class="mt-3 font-semibold text-slate-900">{{ project.name }}</h3><p class="mt-1 text-sm text-slate-500">{{ project.description or 'No description' }}</p><div class="mt-4 flex items-center justify-between text-xs"><span>{{ project.record_count }} captures</span><span>{{ project.device_count }} devices</span></div></a>{% endfor %}</div>{% else %}<div class="empty">Create your first project below.</div>{% endif %}</section>
-{% if current_user.role in ['admin','manager'] %}<div class="mt-6 grid gap-6 lg:grid-cols-2"><section class="card card-body"><p class="eyebrow">Quick setup</p><h2 class="section-title mt-1">Create project</h2><form method="post" action="/projects" class="mt-4 grid gap-3"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input class="input" name="name" placeholder="Project name" maxlength="100" required><input class="input" name="description" placeholder="Description" maxlength="500"><button class="btn btn-primary justify-self-start">Create project</button></form></section><section class="card card-body"><p class="eyebrow">Grow the team</p><h2 class="section-title mt-1">Invite a person</h2><form method="post" action="/invitations" class="mt-4 grid gap-3"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input class="input" name="email" type="email" placeholder="teammate@company.com" required><button class="btn btn-primary justify-self-start">Create invitation</button></form></section></div>{% endif %}
+
+{# Timer hero. The aurora is decorative and sits behind the content, never over it. #}
+<section class="card relative isolate mt-6 overflow-hidden border-brand-line">
+  <span class="aurora -top-24 -right-16 h-64 w-64"></span>
+  <div class="dotfield absolute inset-0 -z-10 text-brand/10"></div>
+  <div class="card-body flex flex-wrap items-center justify-between gap-5">
+    <div class="min-w-0">
+      <p class="eyebrow flex items-center gap-2">
+        {% if active_timer and active_timer.status == 'active' %}<span class="live-dot"></span>{% endif %}Web timer
+      </p>
+      {% if active_timer %}
+      <h2 class="mt-2 truncate text-xl font-semibold tracking-[-0.02em] text-ink">{{ active_timer.project_name }}{% if active_timer.task_name %} <span class="text-muted">· {{ active_timer.task_name }}</span>{% endif %}</h2>
+      <p class="mt-1.5 flex items-center gap-2 text-sm text-muted">
+        <span class="badge {{ 'badge-ok' if active_timer.status == 'active' else 'badge-warn' }} badge-dot">{{ active_timer.status }}</span>
+        <span class="font-mono text-[15px] font-medium text-ink tabular-nums" data-elapsed="{{ active_timer.tracked_seconds }}">{{ active_timer.tracked_seconds // 3600 }}h {{ '%02d'|format((active_timer.tracked_seconds % 3600)//60) }}m</span>
+      </p>
+      {% else %}
+      <h2 class="mt-2 text-xl font-semibold tracking-[-0.02em] text-ink">Start tracking from this browser</h2>
+      <p class="mt-1.5 text-sm text-muted">Web time has no screenshots or input activity.</p>
+      {% endif %}
+    </div>
+    {% if active_timer %}
+    <div class="flex gap-2">
+      <form method="post" action="/timer/{{ 'resume' if active_timer.status == 'paused' else 'pause' }}"><input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="btn btn-secondary"><svg class="icon icon-sm"><use href="#i-{{ 'play' if active_timer.status == 'paused' else 'pause' }}"></use></svg> {{ 'Resume' if active_timer.status == 'paused' else 'Break' }}</button></form>
+      <form method="post" action="/timer/stop"><input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button class="btn btn-danger"><svg class="icon icon-sm"><use href="#i-stop"></use></svg> Stop timer</button></form>
+    </div>
+    {% else %}
+    <form method="post" action="/timer/start" class="flex flex-wrap items-center gap-2"><input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <select class="input w-52" name="project_id" aria-label="Project to track" required><option value="">Select project</option>{% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+      <button class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-play"></use></svg> Start timer</button></form>
+    {% endif %}
+  </div>
+</section>
+
+<section data-stagger-items class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+  <article class="metric-card">
+    <span class="metric-icon bg-brand-tint text-brand"><svg class="icon icon-lg"><use href="#i-clock"></use></svg></span>
+    <p class="metric-label mt-4">Tracked this week</p>
+    <p class="metric-value"><span data-count="{{ summary.tracked_seconds // 3600 }}">{{ summary.tracked_seconds // 3600 }}</span><small>h</small> {{ (summary.tracked_seconds % 3600) // 60 }}<small>m</small></p>
+    <p class="metric-note">Across {{ summary.tracked_members }} team member{{ '' if summary.tracked_members == 1 else 's' }}</p>
+  </article>
+
+  <article class="metric-card">
+    <span class="metric-icon bg-ok-tint text-ok"><svg class="icon icon-lg"><use href="#i-activity"></use></svg></span>
+    <p class="metric-label mt-4">Average activity</p>
+    <p class="metric-value"><span data-count="{{ summary.activity_percent }}">{{ summary.activity_percent }}</span><small>%</small></p>
+    <div class="meter mt-3"><span class="bg-ok" style="width:{{ summary.activity_percent }}%"></span></div>
+    <p class="metric-note">{{ summary.screenshot_count }} captured intervals</p>
+  </article>
+
+  <article class="metric-card">
+    <span class="metric-icon bg-info-tint text-info"><svg class="icon icon-lg"><use href="#i-users"></use></svg></span>
+    <p class="metric-label mt-4">Working now</p>
+    <p class="metric-value"><span data-count="{{ summary.active_members }}">{{ summary.active_members }}</span></p>
+    <p class="metric-note">Live desktop sessions</p>
+  </article>
+
+  {% set pending_total = summary.pending.timesheets + summary.pending.manual_time + summary.pending.time_off + summary.pending.expenses %}
+  <article class="metric-card">
+    <span class="metric-icon bg-warn-tint text-warn"><svg class="icon icon-lg"><use href="#i-inbox"></use></svg></span>
+    <p class="metric-label mt-4">Needs review</p>
+    <p class="metric-value"><span data-count="{{ pending_total }}">{{ pending_total }}</span></p>
+    <p class="metric-note">Time, leave, and expenses</p>
+  </article>
+</section>
+
+<div class="mt-5 grid gap-5 xl:grid-cols-[1.45fr_1fr]">
+
+  {# Seven-day tracked time. One series, so no legend: the card title names it.
+     Only the busiest day is labelled — a number on every bar is noise. #}
+  {% set daily = summary.daily or [] %}
+  {% set peak = (daily | map(attribute='tracked_seconds') | max) if daily else 0 %}
+  {% set week_total = (daily | map(attribute='tracked_seconds') | sum) if daily else 0 %}
+  <section class="card">
+    <div class="card-header">
+      <div>
+        <h2 class="section-title">Tracked time</h2>
+        <p class="muted">Last seven days</p>
+      </div>
+      {% if week_total %}
+      {% set average = week_total // (daily | length) %}
+      {% set today = daily[-1].tracked_seconds %}
+      {% set delta = ((today - average) * 100 // average) if average else 0 %}
+      <span class="trend {{ 'trend-up' if delta > 0 else 'trend-down' if delta < 0 else 'trend-flat' }}"
+            title="Today {{ today // 3600 }}h vs. {{ average // 3600 }}h daily average">
+        <svg class="icon icon-sm h-3 w-3"><use href="#i-trend-{{ 'up' if delta >= 0 else 'down' }}"></use></svg>
+        {{ '+' if delta > 0 }}{{ delta }}% vs. average
+      </span>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      {% if peak %}
+      <div class="flex h-44 items-end gap-2 sm:gap-3">
+        {% for d in daily %}
+        {% set pct = (d.tracked_seconds * 100 // peak) if peak else 0 %}
+        <div class="group relative flex h-full flex-1 flex-col justify-end">
+          {# Hover tooltip. Anchored above the bar and out of the flow so it
+             never resizes the plot. #}
+          <span class="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 -translate-x-1/2 scale-95 rounded-lg bg-ink px-2.5 py-1.5 text-[11px] font-medium whitespace-nowrap text-canvas opacity-0 shadow-e2 transition duration-150 group-hover:scale-100 group-hover:opacity-100">
+            {{ d.day.strftime('%a %d %b') }} · {{ d.tracked_seconds // 3600 }}h {{ (d.tracked_seconds % 3600) // 60 }}m
+          </span>
+          <span class="relative block w-full max-w-[46px] justify-self-center rounded-t-[4px] transition-colors duration-150 {{ 'bg-brand' if loop.last else 'bg-brand/45 group-hover:bg-brand/70' }}"
+                style="height:{{ pct if pct > 1 else 1 }}%;min-height:3px;margin-inline:auto;animation:df-grow .7s var(--ease-expo) both;animation-delay:{{ loop.index0 * 55 }}ms;transform-origin:bottom">
+            {% if d.tracked_seconds == peak %}
+            <span class="absolute bottom-full left-1/2 mb-1.5 -translate-x-1/2 text-[11px] font-semibold text-ink tabular-nums">{{ peak // 3600 }}h</span>
+            {% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+      <div class="mt-2.5 flex gap-2 border-t border-line-soft pt-2.5 sm:gap-3">
+        {% for d in daily %}<span class="flex-1 text-center text-[11px] {{ 'font-semibold text-ink' if loop.last else 'text-faint' }}">{{ d.day.strftime('%a') }}</span>{% endfor %}
+      </div>
+      {% else %}
+      <div class="empty">
+        <svg viewBox="0 0 100 100" class="empty-art h-10 w-10"><use href="#i-shape-petal"></use></svg>
+        <p class="section-title">No time tracked this week</p>
+        <p class="muted mt-1">Bars appear once a timer runs.</p>
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="card-header"><div><h2 class="section-title">Approval inbox</h2><p class="muted">Items waiting for a decision</p></div></div>
+    <div class="grid gap-2.5 p-5">
+      {% for label, href, count, icon in [
+        ('Timesheets', '/timesheets', summary.pending.timesheets, 'sheet'),
+        ('Manual time', '/time-entries', summary.pending.manual_time, 'clock'),
+        ('Time off', '/schedules', summary.pending.time_off, 'calendar'),
+        ('Expenses', '/financials', summary.pending.expenses, 'receipt')] %}
+      <a class="approval-row" href="{{ href }}">
+        <span class="flex items-center gap-2.5"><svg class="icon text-faint"><use href="#i-{{ icon }}"></use></svg>{{ label }}</span>
+        <strong>{{ count }}</strong>
+      </a>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+
+<section class="card mt-5">
+  <div class="card-header">
+    <div><h2 class="section-title">Recent time</h2><p class="muted">Latest sessions across your workspace</p></div>
+    <a class="link" href="/time-entries">All time <svg class="icon icon-sm"><use href="#i-arrow-right"></use></svg></a>
+  </div>
+  {% if summary.recent %}
+  <div class="table-wrap"><table class="table"><thead><tr><th>Member</th><th>Project / task</th><th>Status</th><th class="text-right">Duration</th></tr></thead>
+  <tbody>{% for row in summary.recent %}
+    <tr>
+      <td>
+        <div class="flex items-center gap-2.5">
+          <span class="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-brand-tint text-[11px] font-semibold text-brand-ink">{{ (row.full_name or row.email or '?')[0] | upper }}</span>
+          <div><div class="font-medium text-ink">{{ row.full_name or row.email or 'Unassigned' }}</div>
+          <div class="text-xs text-faint">{{ row.started_at[:16] | replace('T',' ') }}</div></div>
+        </div>
+      </td>
+      <td><div>{{ row.project_name or 'No project' }}</div><div class="text-xs text-faint">{{ row.task_name or 'General time' }}</div></td>
+      <td><span class="badge badge-dot {{ 'badge-ok' if row.status == 'active' else 'badge-warn' if row.status == 'paused' else 'badge-neutral' }}">{{ row.status }}</span></td>
+      <td class="text-right font-medium tabular-nums">{{ row.tracked_seconds // 3600 }}h {{ (row.tracked_seconds % 3600) // 60 }}m</td>
+    </tr>{% endfor %}</tbody></table></div>
+  {% else %}
+  <div class="empty">
+    <svg viewBox="0 0 100 100" class="empty-art h-10 w-10"><use href="#i-shape-star"></use></svg>
+    <p class="section-title">No tracked time yet</p>
+    <p class="muted mt-1">Enroll the desktop app to begin.</p>
+  </div>
+  {% endif %}
+</section>
+
+<section id="projects" class="card mt-5">
+  <div class="card-header"><div><h2 class="section-title">Projects &amp; budgets</h2><p class="muted">Current allocation and weekly tracked time</p></div></div>
+  {% if projects %}
+  <div class="grid gap-4 p-5 sm:grid-cols-2 xl:grid-cols-3">
+    {% for project in projects %}
+    <a href="/projects/{{ project.id }}" class="group relative rounded-xl border border-line bg-surface p-4 transition duration-200 ease-out hover:-translate-y-0.5 hover:border-brand-line hover:shadow-e2">
+      <div class="flex items-center justify-between">
+        <span class="flex items-center gap-2">
+          <span class="h-2.5 w-2.5 rounded-full ring-4 ring-current/10" style="background:{{ project.color }};color:{{ project.color }}"></span>
+          <span class="text-xs text-faint">{{ project.member_count }} members</span>
+        </span>
+        <svg class="icon icon-sm text-faint opacity-0 transition-all duration-200 group-hover:translate-x-0.5 group-hover:opacity-100"><use href="#i-arrow-right"></use></svg>
+      </div>
+      <h3 class="mt-3 font-semibold text-ink">{{ project.name }}</h3>
+      <p class="mt-1 line-clamp-2 text-sm text-muted">{{ project.description or 'No description' }}</p>
+      <div class="mt-4 flex items-center gap-4 text-xs text-faint">
+        <span class="flex items-center gap-1.5"><svg class="icon icon-sm h-3.5 w-3.5"><use href="#i-camera"></use></svg>{{ project.record_count }} captures</span>
+        <span class="flex items-center gap-1.5"><svg class="icon icon-sm h-3.5 w-3.5"><use href="#i-window"></use></svg>{{ project.device_count }} devices</span>
+      </div>
+    </a>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div class="empty">
+    <svg viewBox="0 0 100 100" class="empty-art h-10 w-10"><use href="#i-shape-petal"></use></svg>
+    <p class="section-title">No projects yet</p>
+    <p class="muted mt-1">Create your first project below.</p>
+  </div>
+  {% endif %}
+</section>
+
+{% if current_user.role in ['admin','manager'] %}
+<div class="mt-5 grid gap-5 lg:grid-cols-2">
+  <section class="card card-body">
+    <p class="eyebrow">Quick setup</p><h2 class="section-title mt-1.5">Create project</h2>
+    <form method="post" action="/projects" class="mt-4 grid gap-3"><input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input class="input" name="name" aria-label="Project name" placeholder="Project name" maxlength="100" required>
+      <input class="input" name="description" aria-label="Project description" placeholder="Description" maxlength="500">
+      <button class="btn btn-primary justify-self-start"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> Create project</button></form>
+  </section>
+  <section class="card card-body">
+    <p class="eyebrow">Grow the team</p><h2 class="section-title mt-1.5">Invite a person</h2>
+    <form method="post" action="/invitations" class="mt-4 grid gap-3"><input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input class="input" name="email" type="email" aria-label="Teammate email" placeholder="teammate@company.com" required>
+      <button class="btn btn-primary justify-self-start"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> Create invitation</button></form>
+  </section>
+</div>
+{% endif %}
 {% endblock %}

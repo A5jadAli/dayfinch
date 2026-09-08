@@ -22,7 +22,7 @@
           <td><a class="link" href="/devices/{{ device.id }}">{{ device.name }}</a></td>
           <td>{{ device.owner_email }}</td>
           <td><span class="badge badge-neutral">{{ device.last_status or 'enrolled' }}</span></td>
-          <td class="text-slate-500 tabular-nums">{{ (device.last_seen_at[:19] | replace('T', ' ')) if device.last_seen_at else 'Never' }}</td>
+          <td class="text-muted tabular-nums">{{ (device.last_seen_at[:19] | replace('T', ' ')) if device.last_seen_at else 'Never' }}</td>
           <td class="text-right tabular-nums">{{ device.record_count }}</td>
         </tr>
         {% endfor %}
@@ -43,7 +43,7 @@
       <tbody>
         {% for member in members %}
         <tr>
-          <td class="text-slate-900">{{ member.email }}</td>
+          <td class="text-ink">{{ member.email }}</td>
           <td>{% if member.enabled %}<span class="badge badge-ok">Active</span>{% else %}<span class="badge badge-neutral">Invitation pending</span>{% endif %}</td>
           <td>{% if current_user.role in ['admin','manager'] and member.id != current_user.id %}<form method="post" action="/projects/{{ project.id }}/members/{{ member.id }}/remove"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="btn btn-danger btn-sm">Remove</button></form>{% endif %}</td>
         </tr>
@@ -53,7 +53,7 @@
   </div>
   {% endif %}
   {% if current_user.role in ['admin','manager'] and available_users %}
-  <form method="post" action="/projects/{{ project.id }}/members" class="flex flex-wrap items-center gap-2 border-t border-slate-200 px-5 py-4 sm:px-6">
+  <form method="post" action="/projects/{{ project.id }}/members" class="flex flex-wrap items-center gap-2 border-t border-line px-5 py-4 sm:px-6">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <select class="input w-full sm:w-64" name="user_id" required>
       <option value="" disabled selected>Add a person</option>
@@ -73,10 +73,10 @@
       <tbody>
         {% for task in tasks %}
         <tr>
-          <td class="text-slate-900">{{ task.name }}</td>
+          <td class="text-ink">{{ task.name }}</td>
           <td><span class="badge badge-neutral">{{ task.status }}</span></td>
           <td>{{ 'Billable' if task.billable else 'Non-billable' }}</td>
-          <td><code class="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-700">{{ task.id }}</code></td>
+          <td><code class="rounded bg-sunken px-1.5 py-0.5 font-mono text-xs text-ink-2">{{ task.id }}</code></td>
           <td>{% if current_user.role in ['admin','manager'] %}<form method="post" action="/projects/{{ project.id }}/tasks/{{ task.id }}/status"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="task_status" value="{{ 'active' if task.status == 'archived' else 'archived' }}"><button class="btn btn-secondary btn-sm">{{ 'Restore' if task.status == 'archived' else 'Archive' }}</button></form>{% endif %}</td>
         </tr>
         {% endfor %}
@@ -87,7 +87,7 @@
   <div class="empty"><p class="muted">No tasks yet. Tracking will be attributed to general project time.</p></div>
   {% endif %}
   {% if current_user.role in ['admin','manager'] %}
-  <form method="post" action="/projects/{{ project.id }}/tasks" class="grid gap-4 border-t border-slate-200 px-5 py-5 sm:grid-cols-3 sm:px-6">
+  <form method="post" action="/projects/{{ project.id }}/tasks" class="grid gap-4 border-t border-line px-5 py-5 sm:grid-cols-3 sm:px-6">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <label class="field">
       <span class="field-label">Name</span>
@@ -109,7 +109,7 @@
   {% endif %}
 </section>
 
-<section class="card mt-6"><div class="card-header"><div><h2 class="section-title">To-dos</h2><p class="muted">Track deliverables independently from timer tasks.</p></div></div>{% if todos %}<div class="divide-y divide-slate-100">{% for todo in todos %}<div class="flex items-center gap-3 px-5 py-4"><form method="post" action="/projects/{{ project.id }}/todos/{{ todo.id }}/complete"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="complete" value="{{ 0 if todo.completed_at else 1 }}"><button class="grid h-6 w-6 place-items-center rounded-full border {{ 'border-emerald-500 bg-emerald-500 text-white' if todo.completed_at else 'border-slate-300 bg-white' }}">{{ '✓' if todo.completed_at else '' }}</button></form><div><p class="font-medium {{ 'text-slate-400 line-through' if todo.completed_at else 'text-slate-900' }}">{{ todo.name }}</p><p class="text-xs text-slate-500">{{ todo.description or 'No description' }}</p></div></div>{% endfor %}</div>{% endif %}<form method="post" action="/projects/{{ project.id }}/todos" class="grid gap-3 border-t border-slate-100 p-5 sm:grid-cols-[1fr_1fr_auto]"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input class="input" name="name" placeholder="Add a to-do" required><input class="input" name="description" placeholder="Description"><input type="hidden" name="add_to_future_projects" value="0"><button class="btn btn-primary">Add to-do</button></form></section>
+<section class="card mt-6"><div class="card-header"><div><h2 class="section-title">To-dos</h2><p class="muted">Track deliverables independently from timer tasks.</p></div></div>{% if todos %}<div class="divide-y divide-line-soft">{% for todo in todos %}<div class="flex items-center gap-3 px-5 py-4"><form method="post" action="/projects/{{ project.id }}/todos/{{ todo.id }}/complete"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input type="hidden" name="complete" value="{{ 0 if todo.completed_at else 1 }}"><button class="grid h-6 w-6 place-items-center rounded-full border {{ 'border-emerald-500 bg-ok text-white' if todo.completed_at else 'border-line bg-surface' }}">{{ '✓' if todo.completed_at else '' }}</button></form><div><p class="font-medium {{ 'text-faint line-through' if todo.completed_at else 'text-ink' }}">{{ todo.name }}</p><p class="text-xs text-muted">{{ todo.description or 'No description' }}</p></div></div>{% endfor %}</div>{% endif %}<form method="post" action="/projects/{{ project.id }}/todos" class="grid gap-3 border-t border-line-soft p-5 sm:grid-cols-[1fr_1fr_auto]"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input class="input" name="name" placeholder="Add a to-do" required><input class="input" name="description" placeholder="Description"><input type="hidden" name="add_to_future_projects" value="0"><button class="btn btn-primary">Add to-do</button></form></section>
 
 <section class="card mt-6">
   <div class="card-header"><h2 class="section-title">Work sessions</h2></div>
@@ -120,8 +120,8 @@
       <tbody>
         {% for session in sessions %}
         <tr>
-          <td class="text-slate-500 tabular-nums">{{ (session.started_at[:19] | replace('T', ' ')) if session.started_at else '' }}</td>
-          <td class="text-slate-900">{{ session.task_name or 'General project time' }}</td>
+          <td class="text-muted tabular-nums">{{ (session.started_at[:19] | replace('T', ' ')) if session.started_at else '' }}</td>
+          <td class="text-ink">{{ session.task_name or 'General project time' }}</td>
           <td><span class="badge {{ 'badge-ok' if session.status == 'active' else 'badge-neutral' }}">{{ session.status }}</span></td>
           <td class="text-right tabular-nums">{{ session.tracked_seconds }}s</td>
         </tr>

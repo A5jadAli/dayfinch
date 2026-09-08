@@ -18,6 +18,17 @@ npm run build:css
 python -m pip wheel . --no-deps --no-build-isolation
 ```
 
+With a local server running, exercise every authenticated page in real Chrome at
+desktop and 390px widths, in both themes. The audit fails on body overflow,
+missing SVG symbols, unlabeled interactive controls, redirects, or theme errors,
+and writes screenshots plus a JSON report to the ignored `.visual-audit/` folder:
+
+```bash
+DAYFINCH_AUDIT_EMAIL=admin@example.local \
+DAYFINCH_AUDIT_PASSWORD='your local admin password' \
+npm run audit:ui
+```
+
 The suite covers authentication and CSRF, role/project isolation, time-state
 transitions, offline replay idempotency, restart gaps, idle deduction, queue bounds
 and crash cleanup, encrypted queue metadata/screenshots, domain reduction, capture

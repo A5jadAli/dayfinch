@@ -1,3 +1,71 @@
 {% extends "base.html" %}{% block title %}Sign in · Dayfinch{% endblock %}{% block guest_content %}
-<div class="grid min-h-screen bg-[#111827] lg:grid-cols-[1.1fr_.9fr]"><section class="hidden flex-col justify-between p-14 lg:flex"><div class="flex items-center gap-3"><span class="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-xl font-black text-white">D</span><span class="text-xl font-bold text-white">Dayfinch</span></div><div class="max-w-xl"><p class="text-sm font-semibold uppercase tracking-[.18em] text-violet-400">Time intelligence for modern teams</p><h1 class="mt-5 text-5xl font-bold leading-[1.1] tracking-tight text-white">Know where work goes.<br>Help your team thrive.</h1><p class="mt-6 max-w-lg text-base leading-7 text-slate-400">Transparent time tracking, activity context, workforce operations, and financial clarity—without recording what people type.</p><div class="mt-9 flex gap-6 text-sm text-slate-400"><span>✓ Privacy-first</span><span>✓ Offline-safe</span><span>✓ Cross-platform</span></div></div><p class="text-xs text-slate-600">© 2026 Dayfinch Workforce OS</p></section><section class="grid place-items-center bg-[#f6f7fb] p-5 sm:p-10"><div class="w-full max-w-md"><div class="mb-8 lg:hidden"><span class="grid h-11 w-11 place-items-center rounded-xl bg-brand-600 text-xl font-black text-white">D</span></div><p class="eyebrow">Private workspace</p><h2 class="page-title mt-2">Welcome back</h2><p class="muted mt-2">Sign in to your Dayfinch workspace.</p>{% if error %}<p class="notice-error mt-5">{{ error }}</p>{% endif %}<form method="post" action="/login" class="mt-7 grid gap-5"><input type="hidden" name="csrf" value="{{ csrf_token }}"><label class="field"><span class="field-label">Work email</span><input class="input py-3" name="email" type="email" autocomplete="username" maxlength="254" placeholder="you@company.com" required autofocus></label><label class="field"><span class="field-label">Password</span><input class="input py-3" name="password" type="password" autocomplete="current-password" placeholder="Your password" required></label><button class="btn btn-primary mt-1 py-3" type="submit">Sign in securely</button></form><p class="mt-6 text-center text-xs text-slate-400">Access is invitation-only. Contact your workspace owner.</p></div></section></div>
+<div class="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
+
+  {# Brand panel. Stays dark in both themes — it is the product's cover, not a
+     surface. The shapes are decorative and sit behind everything. #}
+  <section class="relative isolate hidden flex-col justify-between overflow-hidden bg-rail p-14 lg:flex">
+    <span class="aurora -top-32 -left-24 h-[30rem] w-[30rem] opacity-40"></span>
+    <span class="aurora right-0 -bottom-40 h-[26rem] w-[26rem] opacity-25"></span>
+    <div class="dotfield absolute inset-0 -z-10 text-white/[.06]"></div>
+
+    {# Minimal arc-built shapes, the same geometry as the brand mark. #}
+    <svg viewBox="0 0 100 100" class="pointer-events-none absolute top-24 right-16 -z-10 h-40 w-40 text-brand/25" style="animation:df-reveal 1.4s var(--ease-expo) .4s both"><use href="#i-shape-petal"></use></svg>
+    <svg viewBox="0 0 100 100" class="pointer-events-none absolute right-40 bottom-28 -z-10 h-20 w-20 text-white/10" style="animation:df-reveal 1.4s var(--ease-expo) .6s both"><use href="#i-shape-star"></use></svg>
+
+    <div class="reveal flex items-center gap-3" style="--i:0">
+      <span class="grid h-11 w-11 place-items-center rounded-[13px] bg-gradient-to-br from-brand to-indigo-600 text-white" style="box-shadow:0 10px 30px -8px var(--p-brand)">
+        <svg viewBox="0 0 32 32" class="h-5 w-5"><use href="#i-mark"></use></svg>
+      </span>
+      <span class="text-lg font-semibold tracking-[-0.01em] text-white">Dayfinch</span>
+    </div>
+
+    <div class="max-w-xl">
+      <p class="reveal text-[13px] font-semibold tracking-[0.16em] text-brand uppercase" style="--i:1">Time intelligence for modern teams</p>
+      <h1 class="reveal mt-5 text-[52px] leading-[1.05] font-medium tracking-[-0.035em] text-white" style="--i:2">Know where work goes.<br>Help your team thrive.</h1>
+      <p class="reveal mt-6 max-w-lg text-[15px] leading-7 text-white/55" style="--i:3">Transparent time tracking, activity context, workforce operations, and financial clarity — without recording what people type.</p>
+      <div class="reveal mt-10 flex flex-wrap gap-x-7 gap-y-3 text-[13px] text-white/60" style="--i:4">
+        {% for label in ['Privacy-first', 'Offline-safe', 'Cross-platform'] %}
+        <span class="flex items-center gap-2"><svg class="icon icon-sm text-brand"><use href="#i-check"></use></svg>{{ label }}</span>
+        {% endfor %}
+      </div>
+    </div>
+
+    <p class="reveal text-xs text-white/30" style="--i:5">© 2026 Dayfinch Workforce OS</p>
+  </section>
+
+  <section class="grid place-items-center bg-canvas p-5 sm:p-10">
+    <div class="w-full max-w-[380px]">
+      <div class="reveal mb-8 lg:hidden" style="--i:0">
+        <span class="grid h-11 w-11 place-items-center rounded-[13px] bg-brand text-white">
+          <svg viewBox="0 0 32 32" class="h-5 w-5"><use href="#i-mark"></use></svg>
+        </span>
+      </div>
+
+      <div class="reveal" style="--i:1">
+        <p class="eyebrow">Private workspace</p>
+        <h2 class="page-title mt-2">Welcome back</h2>
+        <p class="muted mt-2">Sign in to your Dayfinch workspace.</p>
+      </div>
+
+      {% if error %}<p class="notice-error mt-5"><svg class="icon icon-sm mt-px"><use href="#i-alert"></use></svg><span>{{ error }}</span></p>{% endif %}
+
+      <form method="post" action="/login" class="reveal mt-7 grid gap-4" style="--i:2">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <label class="field">
+          <span class="field-label">Work email</span>
+          <input class="input py-2.5" name="email" type="email" autocomplete="username" maxlength="254" placeholder="you@company.com" required autofocus>
+        </label>
+        <label class="field">
+          <span class="field-label">Password</span>
+          <input class="input py-2.5" name="password" type="password" autocomplete="current-password" placeholder="Your password" required>
+        </label>
+        <button class="btn btn-primary mt-2 py-2.5" type="submit">
+          <svg class="icon icon-sm"><use href="#i-shield"></use></svg> Sign in securely
+        </button>
+      </form>
+
+      <p class="reveal mt-6 text-center text-xs text-faint" style="--i:3">Access is invitation-only. Contact your workspace owner.</p>
+    </div>
+  </section>
+</div>
 {% endblock %}

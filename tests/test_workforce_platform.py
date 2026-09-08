@@ -70,7 +70,10 @@ def test_workforce_approval_and_finance_workflows(database):
     database.create_payroll(member["id"], date(2026, 9, 1), date(2026, 9, 7), "USD")
     finance = database.finance_summary()
     assert finance["invoices"][0]["subtotal"] == Decimal("250")
-    assert finance["payroll"][0]["gross_amount"] == Decimal("80.00")
+    assert finance["payroll_runs"][0]["gross_amount"] == Decimal("80.00")
+    # The scalar gross-paid total must survive alongside the run list;
+    # both used to share the "payroll" key and the list won.
+    assert not isinstance(finance["payroll"], list)
 
 
 def test_agent_can_switch_between_assigned_projects(database):
@@ -85,6 +88,31 @@ def test_agent_can_switch_between_assigned_projects(database):
     assert first_session["project_id"] == first["id"]
     assert second_session["project_id"] == second["id"]
     assert first_session["id"] != second_session["id"]
+
+
+def test_dashboard_counts_segments_that_cross_the_week_boundary(database):
+    admin, member, project = _team(database)
+    device, _ = database.create_device("Workstation", member["id"], project["id"])
+    session = database.sync_work_session(device, "active", None, project["id"])
+
+    with database.connect() as connection:
+        connection.execute(
+            """UPDATE work_session_segments
+                  SET started_at = date_trunc('week', CURRENT_TIMESTAMP) - INTERVAL '2 days'
+                WHERE session_id = %s""",
+            (session["id"],),
+        )
+
+    summary = database.dashboard_summary()
+    assert summary["tracked_seconds"] > 0
+    assert summary["active_members"] == 1
+    assert summary["tracked_members"] == 1
+    assert sum(day["tracked_seconds"] for day in summary["daily"]) > 0
+    project_summary = next(
+        item for item in summary["projects"] if item["id"] == project["id"]
+    )
+    assert project_summary["tracked_seconds"] > 0
+    assert project_summary["member_count"] == 1
 
 
 def test_tracking_policy_round_trip(database):

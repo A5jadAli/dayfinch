@@ -17,12 +17,17 @@ class WorkforceRepository(RepositoryMixin):
         with self.connect() as connection:
             totals = connection.execute(
                 f"""SELECT
-                    COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(s.ended_at, CURRENT_TIMESTAMP) - s.started_at))), 0)::BIGINT tracked_seconds,
+                    COALESCE(SUM(EXTRACT(EPOCH FROM (
+                        LEAST(COALESCE(s.ended_at, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+                        - GREATEST(s.started_at, date_trunc('week', CURRENT_TIMESTAMP))
+                    ))), 0)::BIGINT tracked_seconds,
                     COUNT(DISTINCT CASE WHEN ws.status = 'active' THEN ws.user_id END) active_members,
                     COUNT(DISTINCT ws.user_id) tracked_members
                   FROM work_session_segments s
                   JOIN work_sessions ws ON ws.id = s.session_id
-                  WHERE s.started_at >= date_trunc('week', CURRENT_TIMESTAMP) {user_clause}""",
+                  WHERE s.started_at < CURRENT_TIMESTAMP
+                    AND COALESCE(s.ended_at, CURRENT_TIMESTAMP) > date_trunc('week', CURRENT_TIMESTAMP)
+                    {user_clause}""",
                 params,
             ).fetchone()
             activity = connection.execute(
@@ -43,13 +48,51 @@ class WorkforceRepository(RepositoryMixin):
             ).fetchone()
             projects = connection.execute(
                 """SELECT p.id, p.name, p.color, p.budget_amount, p.budget_minutes,
-                          p.budget_type, COUNT(DISTINCT pm.user_id) member_count,
-                          COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(seg.ended_at, CURRENT_TIMESTAMP)-seg.started_at))),0)::BIGINT tracked_seconds
+                          p.budget_type, COALESCE(pm.member_count, 0)::BIGINT member_count,
+                          COALESCE(tr.tracked_seconds, 0)::BIGINT tracked_seconds
                    FROM projects p
-                   LEFT JOIN project_members pm ON pm.project_id=p.id
-                   LEFT JOIN work_sessions ws ON ws.project_id=p.id
-                   LEFT JOIN work_session_segments seg ON seg.session_id=ws.id AND seg.started_at >= date_trunc('week', CURRENT_TIMESTAMP)
-                   WHERE p.enabled=TRUE GROUP BY p.id ORDER BY tracked_seconds DESC LIMIT 6"""
+                   LEFT JOIN LATERAL (
+                       SELECT COUNT(*) member_count
+                         FROM project_members
+                        WHERE project_id = p.id
+                   ) pm ON TRUE
+                   LEFT JOIN LATERAL (
+                       SELECT SUM(EXTRACT(EPOCH FROM (
+                                  LEAST(COALESCE(seg.ended_at, CURRENT_TIMESTAMP), CURRENT_TIMESTAMP)
+                                  - GREATEST(seg.started_at, date_trunc('week', CURRENT_TIMESTAMP))
+                              ))) tracked_seconds
+                         FROM work_sessions ws
+                         JOIN work_session_segments seg ON seg.session_id = ws.id
+                        WHERE ws.project_id = p.id
+                          AND seg.started_at < CURRENT_TIMESTAMP
+                          AND COALESCE(seg.ended_at, CURRENT_TIMESTAMP) > date_trunc('week', CURRENT_TIMESTAMP)
+                   ) tr ON TRUE
+                   WHERE p.enabled=TRUE ORDER BY tracked_seconds DESC LIMIT 6"""
+            ).fetchall()
+            # Seven-day series for the dashboard chart. generate_series keeps
+            # days with no tracked time in the result so the bars stay evenly
+            # spaced instead of collapsing the gaps.
+            daily = connection.execute(
+                f"""SELECT d::DATE AS day,
+                           COALESCE(t.tracked_seconds, 0)::BIGINT tracked_seconds
+                    FROM generate_series(
+                             date_trunc('day', CURRENT_TIMESTAMP) - INTERVAL '6 days',
+                             date_trunc('day', CURRENT_TIMESTAMP),
+                             INTERVAL '1 day') d
+                    LEFT JOIN LATERAL (
+                        SELECT SUM(EXTRACT(EPOCH FROM (
+                                   LEAST(COALESCE(s.ended_at, CURRENT_TIMESTAMP),
+                                         d + INTERVAL '1 day')
+                                   - GREATEST(s.started_at, d)
+                               ))) tracked_seconds
+                          FROM work_session_segments s
+                          JOIN work_sessions ws ON ws.id = s.session_id
+                         WHERE s.started_at < d + INTERVAL '1 day'
+                           AND COALESCE(s.ended_at, CURRENT_TIMESTAMP) > d
+                           {user_clause}
+                    ) t ON TRUE
+                    ORDER BY d""",
+                params,
             ).fetchall()
             recent = connection.execute(
                 """SELECT ws.id, u.email, u.full_name, p.name project_name, t.name task_name,
@@ -64,6 +107,7 @@ class WorkforceRepository(RepositoryMixin):
             **dict(totals),
             **dict(activity),
             "pending": dict(pending),
+            "daily": [dict(row) for row in daily],
             "projects": [dict(row) for row in projects],
             "recent": [dict(row) for row in recent],
         }
@@ -464,7 +508,9 @@ class WorkforceRepository(RepositoryMixin):
         return {
             **dict(totals),
             "invoices": [dict(x) for x in invoices],
-            "payroll": [dict(x) for x in payroll],
+            # `totals` already carries a scalar `payroll` (gross paid), so the
+            # run list needs its own key or it overwrites that total.
+            "payroll_runs": [dict(x) for x in payroll],
             "clients": [dict(x) for x in clients],
         }
 

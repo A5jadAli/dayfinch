@@ -1,29 +1,158 @@
 <!doctype html>
 <html lang="en" class="h-full">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#111827"><title>{% block title %}Dayfinch{% endblock %}</title><link rel="icon" href="{{ url_for('static', path='/dayfinch-icon.svg') }}"><link rel="manifest" href="{{ url_for('static', path='/manifest.webmanifest') }}"><link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}"><script defer src="{{ url_for('static', path='/app.js') }}"></script>{% block head %}{% endblock %}</head>
-<body class="h-full bg-[#f6f7fb] font-sans text-[14px] text-slate-700 antialiased">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta id="themeColor" name="theme-color" content="#f6f6f9">
+<meta name="color-scheme" content="light dark">
+<title>{% block title %}Dayfinch{% endblock %}</title>
+<link rel="icon" href="{{ url_for('static', path='/dayfinch-icon.svg') }}?v={{ asset_version }}">
+<link rel="manifest" href="{{ url_for('static', path='/manifest.webmanifest') }}?v={{ asset_version }}">
+{# Resolve the theme before the first paint so a reload never flashes the wrong
+   one. This has to be inline and synchronous; app.js runs too late. #}
+<script>
+(()=>{let t='light';try{const s=localStorage.getItem('df-theme');
+t=s||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');}catch(e){}
+document.documentElement.dataset.theme=t;
+document.getElementById('themeColor').content=t==='dark'?'#0a0a0d':'#f6f6f9';})();
+</script>
+<link rel="stylesheet" href="{{ url_for('static', path='/app.css') }}?v={{ asset_version }}">
+<script defer src="{{ url_for('static', path='/app.js') }}?v={{ asset_version }}"></script>
+{% block head %}{% endblock %}
+</head>
+<body class="h-full bg-canvas font-sans text-[14px] text-ink-2 antialiased">
+
+{# One inline sprite for the whole app: every icon is <svg class="icon"><use href="#i-name"></use></svg>,
+   so weight and size are set once in .icon and nothing is loaded over the network. #}
+<svg width="0" height="0" aria-hidden="true" focusable="false" style="position:absolute">
+  <defs>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.2 12 3l9 7.2V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+    <symbol id="i-activity" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5.2l3.4 2"/></symbol>
+    <symbol id="i-sheet" viewBox="0 0 24 24"><path d="M10 6h11M10 12h11M10 18h11"/><path d="m3 5.8 1.4 1.4L7.2 4.4"/><path d="m3 11.8 1.4 1.4 2.8-2.8"/><path d="m3 17.8 1.4 1.4 2.8-2.8"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 9 4.8-9 4.8-9-4.8z"/><path d="m3 12.6 9 4.8 9-4.8"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2.5"/><path d="M8 2.6v4M16 2.6v4M3 10h18"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10.4c0 5.5-8 11.8-8 11.8s-8-6.3-8-11.8a8 8 0 1 1 16 0z"/><circle cx="12" cy="10.2" r="2.8"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="M11 18.4h2"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 20.5v-1.8a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1.8"/><circle cx="9" cy="7.5" r="3.8"/><path d="M22 20.5v-1.8a4 4 0 0 0-3-3.86M17.5 4a3.8 3.8 0 0 1 0 7.2"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="13" rx="2.5"/><path d="M2.5 10.5h19M17 15h1.5"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3.5 20.5h17"/><path d="M7 20.5v-5M12 20.5V7M17 20.5v-8.5"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h7M15 7h5M4 12h3M11 12h9M4 17h7M15 17h5"/><circle cx="13" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="13" cy="17" r="2"/></symbol>
+    <symbol id="i-bell" viewBox="0 0 24 24"><path d="M18.5 9.5a6.5 6.5 0 1 0-13 0c0 6-2.2 7.2-2.2 7.2h17.4s-2.2-1.2-2.2-7.2"/><path d="M10.2 20.2a2 2 0 0 0 3.6 0"/></symbol>
+    <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9.5 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4.5"/><path d="m16 16.5 4.5-4.5L16 7.5M20.5 12H9.5"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3.5 6.5h17M3.5 12h17M3.5 17.5h17"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.9A9 9 0 1 1 11.1 3a7.2 7.2 0 0 0 9.9 9.9z"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2 19 12 8 18.8z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9.5 4.5v15M14.5 4.5v15"/></symbol>
+    <symbol id="i-stop" viewBox="0 0 24 24"><rect x="5.5" y="5.5" width="13" height="13" rx="2.5"/></symbol>
+    <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m4.5 12.5 5 5L19.5 7"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3.2 2.6 20h18.8z"/><path d="M12 10v4.2M12 17.4h.01"/></symbol>
+    <symbol id="i-trend-up" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-8"/><path d="M16 7h5v5"/></symbol>
+    <symbol id="i-trend-down" viewBox="0 0 24 24"><path d="m3 7 6 6 4-4 8 8"/><path d="M16 17h5v-5"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.8l1.4-2.2h6.6L16.7 6h1.8A2.5 2.5 0 0 1 21 8.5v9A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/><circle cx="12" cy="12.8" r="3.4"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3.2 9.5h17.6M3.2 14.5h17.6"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></symbol>
+    <symbol id="i-window" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18M6.5 6.5h.01M9.5 6.5h.01"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v11.5"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 20.5h16"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 21.5s8-3.8 8-9.6V5.6L12 2.5 4 5.6v6.3c0 5.8 8 9.6 8 9.6z"/><path d="m9 12 2.2 2.2L15.2 10"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h15"/><path d="m13.5 6.5 6 5.5-6 5.5"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 5.5h17l-6.6 7.6v6l-3.8 2v-8z"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2.5" y="7" width="19" height="13.5" rx="2.5"/><path d="M8.5 7V5.2a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2V7M2.5 12.5h19"/></symbol>
+    <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13.5h4.5l1.5 3h6l1.5-3H21"/><path d="M5.2 4.5h13.6l2.2 9v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
+    <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5 2.5h14v19l-2.3-1.6-2.4 1.6-2.3-1.6-2.4 1.6L7.3 20 5 21.5z"/><path d="M9 8h6M9 12h6"/></symbol>
+    <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></symbol>
+    {# Brand mark: three quarter-discs around a shared centre — a swept clock hand
+       in the flat, arc-built geometry the rest of the app borrows for its shapes. #}
+    <symbol id="i-mark" viewBox="0 0 32 32"><g fill="currentColor" stroke="none"><path d="M16 3a13 13 0 0 1 13 13H16z"/><path d="M16 16h13a13 13 0 0 1-13 13z"/><path d="M3 16A13 13 0 0 1 16 3v13z"/></g></symbol>
+    {# Decorative shapes for empty states and hero art. #}
+    <symbol id="i-shape-star" viewBox="0 0 100 100"><path fill="currentColor" stroke="none" d="M50 0c0 27.6 22.4 50 50 50-27.6 0-50 22.4-50 50 0-27.6-22.4-50-50-50 27.6 0 50-22.4 50-50z"/></symbol>
+    <symbol id="i-shape-petal" viewBox="0 0 100 100"><path fill="currentColor" stroke="none" d="M50 0A50 50 0 0 1 100 50H50zM50 50h50a50 50 0 0 1-50 50zM0 50A50 50 0 0 1 50 0v50z"/></symbol>
+  </defs>
+</svg>
+
 {% if current_user %}
-<div class="min-h-full lg:grid lg:grid-cols-[248px_1fr]">
-<aside id="sidebar" class="fixed inset-y-0 left-0 z-40 hidden w-[248px] flex-col bg-[#111827] text-slate-300 lg:flex">
-  <a href="/" class="flex h-17 items-center gap-3 border-b border-white/8 px-6"><span class="grid h-9 w-9 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-600 text-lg font-black text-white shadow-lg shadow-violet-950/40">D</span><span><strong class="block text-[17px] tracking-tight text-white">Dayfinch</strong><small class="block text-[10px] uppercase tracking-[.2em] text-slate-500">Workforce OS</small></span></a>
-  <nav class="sidebar-nav flex-1 overflow-y-auto px-3 py-5">{% set path = request.url.path %}
+{% set path = request.url.path %}
+<div class="min-h-full lg:grid lg:grid-cols-[252px_1fr]">
+
+{# Backdrop for the mobile drawer; inert on desktop. #}
+<div id="scrim" hidden class="fixed inset-0 z-40 bg-ink/45 backdrop-blur-[2px] lg:hidden"></div>
+
+<aside id="sidebar"
+       class="fixed inset-y-0 left-0 z-50 flex w-[252px] -translate-x-full flex-col bg-rail text-rail-muted transition-transform duration-300 lg:translate-x-0"
+       style="transition-timing-function:var(--ease-expo);view-transition-name:rail">
+  <a href="/" class="flex h-16 items-center gap-3 px-5">
+    <span class="grid h-9 w-9 shrink-0 place-items-center rounded-[11px] bg-gradient-to-br from-brand to-indigo-600 text-white" style="box-shadow:0 6px 16px -6px var(--p-brand)">
+      <svg viewBox="0 0 32 32" class="h-[18px] w-[18px]" aria-hidden="true"><use href="#i-mark"></use></svg>
+    </span>
+    <span class="min-w-0">
+      <strong class="block text-[15px] leading-tight font-semibold tracking-[-0.01em] text-rail-ink">Dayfinch</strong>
+      <small class="block text-[10px] tracking-[0.18em] text-rail-muted/70 uppercase">Workforce OS</small>
+    </span>
+  </a>
+
+  <nav class="flex-1 overflow-y-auto px-4 pt-2 pb-5" aria-label="Primary">
     <p class="nav-label">Workspace</p>
-    <a class="nav-item {{ 'active' if path == '/' else '' }}" href="/"><span>⌂</span> Dashboard</a>
-    <a class="nav-item {{ 'active' if path.startswith('/activity') else '' }}" href="/activity"><span>◉</span> Activity</a>
-    <a class="nav-item {{ 'active' if path.startswith('/time-entries') else '' }}" href="/time-entries"><span>◷</span> Time entries</a>
-    <a class="nav-item {{ 'active' if path.startswith('/timesheets') else '' }}" href="/timesheets"><span>▤</span> Timesheets</a>
-    <p class="nav-label mt-6">Manage</p>
-    <a class="nav-item {{ 'active' if path.startswith('/projects') else '' }}" href="/#projects"><span>◇</span> Projects & tasks</a>
-    <a class="nav-item {{ 'active' if path.startswith('/schedules') else '' }}" href="/schedules"><span>▦</span> Schedules & time off</a>
-    <a class="nav-item {{ 'active' if path.startswith('/locations') else '' }}" href="/locations"><span>⌖</span> Locations</a>
-    <a class="nav-item {{ 'active' if path.startswith('/field') else '' }}" href="/field"><span>◈</span> Field tracker</a>
-    {% if current_user.role in ['admin','manager'] %}<a class="nav-item {{ 'active' if path.startswith('/people') else '' }}" href="/people"><span>♙</span> People</a>{% endif %}
-    <a class="nav-item {{ 'active' if path.startswith('/financials') else '' }}" href="/financials"><span>◒</span> Financials</a>
-    {% if current_user.role in ['admin','manager'] %}<p class="nav-label mt-6">Organization</p><a class="nav-item {{ 'active' if path.startswith('/reports') else '' }}" href="/reports"><span>↧</span> Reports & exports</a><a class="nav-item {{ 'active' if path.startswith('/settings') else '' }}" href="/settings"><span>⚙</span> Settings</a>{% endif %}
+    <a class="nav-item {{ 'active' if path == '/' else '' }}" href="/"{{ ' aria-current=page'|safe if path == '/' }}><svg class="icon"><use href="#i-home"></use></svg> Dashboard</a>
+    <a class="nav-item {{ 'active' if path.startswith('/activity') else '' }}" href="/activity"><svg class="icon"><use href="#i-activity"></use></svg> Activity</a>
+    <a class="nav-item {{ 'active' if path.startswith('/time-entries') else '' }}" href="/time-entries"><svg class="icon"><use href="#i-clock"></use></svg> Time entries</a>
+    <a class="nav-item {{ 'active' if path.startswith('/timesheets') else '' }}" href="/timesheets"><svg class="icon"><use href="#i-sheet"></use></svg> Timesheets</a>
+
+    <p class="nav-label mt-5">Manage</p>
+    <a class="nav-item {{ 'active' if path.startswith('/projects') else '' }}" href="/#projects"><svg class="icon"><use href="#i-layers"></use></svg> Projects &amp; tasks</a>
+    <a class="nav-item {{ 'active' if path.startswith('/schedules') else '' }}" href="/schedules"><svg class="icon"><use href="#i-calendar"></use></svg> Schedules &amp; time off</a>
+    <a class="nav-item {{ 'active' if path.startswith('/locations') else '' }}" href="/locations"><svg class="icon"><use href="#i-pin"></use></svg> Locations</a>
+    <a class="nav-item {{ 'active' if path.startswith('/field') else '' }}" href="/field"><svg class="icon"><use href="#i-phone"></use></svg> Field tracker</a>
+    {% if current_user.role in ['admin','manager'] %}<a class="nav-item {{ 'active' if path.startswith('/people') else '' }}" href="/people"><svg class="icon"><use href="#i-users"></use></svg> People</a>{% endif %}
+    <a class="nav-item {{ 'active' if path.startswith('/financials') else '' }}" href="/financials"><svg class="icon"><use href="#i-wallet"></use></svg> Financials</a>
+
+    {% if current_user.role in ['admin','manager'] %}
+    <p class="nav-label mt-5">Organization</p>
+    <a class="nav-item {{ 'active' if path.startswith('/reports') else '' }}" href="/reports"><svg class="icon"><use href="#i-chart"></use></svg> Reports &amp; exports</a>
+    <a class="nav-item {{ 'active' if path.startswith('/settings') else '' }}" href="/settings"><svg class="icon"><use href="#i-settings"></use></svg> Settings</a>
+    {% endif %}
   </nav>
-  <div class="border-t border-white/8 p-3"><div class="flex items-center gap-3 rounded-xl bg-white/5 p-3"><span class="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-violet-500/20 font-semibold text-violet-300">{{ (current_user.full_name or current_user.email)[0] | upper }}</span><div class="min-w-0 flex-1"><p class="truncate text-sm font-medium text-white">{{ current_user.full_name or current_user.email }}</p><p class="text-xs capitalize text-slate-500">{{ 'owner' if current_user.role == 'admin' else current_user.role }}</p></div><form method="post" action="/logout"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button title="Sign out" class="text-slate-500 hover:text-white">↪</button></form></div></div>
+
+  <div class="border-t border-rail-line p-3">
+    <div class="flex items-center gap-3 rounded-xl px-2 py-2 transition-colors duration-150 hover:bg-rail-hover">
+      <span class="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand/20 text-[12px] font-semibold text-rail-ink">{{ (current_user.full_name or current_user.email)[0] | upper }}</span>
+      <div class="min-w-0 flex-1">
+        <p class="truncate text-[13px] font-medium text-rail-ink">{{ current_user.full_name or current_user.email }}</p>
+        <p class="text-[11px] capitalize text-rail-muted/80">{{ 'owner' if current_user.role == 'admin' else current_user.role }}</p>
+      </div>
+      <form method="post" action="/logout">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <button title="Sign out" aria-label="Sign out" class="grid h-8 w-8 place-items-center rounded-lg text-rail-muted transition hover:bg-rail-hover hover:text-rail-ink"><svg class="icon"><use href="#i-logout"></use></svg></button>
+      </form>
+    </div>
+  </div>
 </aside>
-<div class="min-w-0 lg:col-start-2"><header class="sticky top-0 z-30 flex h-17 items-center justify-between border-b border-slate-200/80 bg-white/90 px-4 backdrop-blur sm:px-7"><div class="flex items-center gap-3"><button id="menuButton" class="btn btn-secondary px-2.5 lg:hidden" aria-label="Open menu">☰</button><div><p class="font-semibold text-slate-900">{{ current_user.full_name or current_user.email }}</p><p class="text-xs text-slate-500">{{ current_user.timezone or 'UTC' }} · Dayfinch Workspace</p></div></div><div class="flex items-center gap-2">{% if current_user.role in ['admin','manager'] %}<a class="hidden rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium hover:bg-slate-50 sm:block" href="/settings">Tracking policy</a>{% endif %}<a href="/notifications" class="relative grid h-9 w-9 place-items-center rounded-lg border border-slate-200 bg-white text-slate-500">♢<i class="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-violet-500"></i></a></div></header><main class="mx-auto max-w-[1500px] px-4 py-6 sm:px-7 sm:py-8">{% block content %}{% endblock %}</main></div>
+
+<div class="min-w-0 lg:col-start-2">
+  <header class="sticky top-0 z-30 flex h-16 items-center justify-between gap-3 border-b border-line bg-canvas/80 px-4 backdrop-blur-xl sm:px-7">
+    <div class="flex min-w-0 items-center gap-3">
+      <button id="menuButton" class="btn btn-secondary btn-icon lg:hidden" aria-label="Open menu" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#i-menu"></use></svg></button>
+      <div class="min-w-0">
+        <p class="truncate font-semibold tracking-[-0.01em] text-ink">{{ current_user.full_name or current_user.email }}</p>
+        <p class="truncate text-xs text-muted">{{ current_user.timezone or 'UTC' }} · Dayfinch Workspace</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      {% if current_user.role in ['admin','manager'] %}<a class="btn btn-secondary hidden sm:inline-flex" href="/settings"><svg class="icon icon-sm"><use href="#i-shield"></use></svg> Tracking policy</a>{% endif %}
+      <button id="themeToggle" class="btn btn-secondary btn-icon" aria-label="Switch theme" title="Switch theme">
+        <svg class="icon" data-theme-icon-light><use href="#i-sun"></use></svg>
+        <svg class="icon" data-theme-icon-dark hidden><use href="#i-moon"></use></svg>
+      </button>
+      <a href="/notifications" class="btn btn-secondary btn-icon relative" aria-label="Notifications">
+        <svg class="icon"><use href="#i-bell"></use></svg>
+        <i class="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-brand ring-2 ring-surface"></i>
+      </a>
+    </div>
+  </header>
+  <main data-stagger class="mx-auto max-w-[1500px] px-4 py-6 sm:px-7 sm:py-8">{% block content %}{% endblock %}</main>
+</div>
 </div>
 {% else %}<main class="min-h-full">{% block guest_content %}{% endblock %}</main>{% endif %}
 </body></html>

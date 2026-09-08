@@ -4,9 +4,14 @@
   "description": "Project time and job-site location tracking for Dayfinch teams.",
   "start_url": "/field",
   "display": "standalone",
-  "background_color": "#111827",
+  "background_color": "#0a0a0d",
   "theme_color": "#6857e5",
   "icons": [
-    {"src": "/static/dayfinch-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable"}
+    {
+      "src": "/static/dayfinch-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
   ]
 }

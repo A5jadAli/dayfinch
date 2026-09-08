@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Accept invitation · Dayfinch{% endblock %}
 {% block guest_content %}
-<section class="mx-auto max-w-md">
-  <div class="card card-body">
+<div class="grid min-h-screen place-items-center bg-canvas p-5">
+<section class="reveal w-full max-w-md">
+  <div class="card card-body" style="box-shadow:var(--shadow-lg)">
     <p class="eyebrow">Private invitation</p>
     {% if invitation %}
     <h1 class="page-title mt-2">Create your account</h1>
     <p class="muted mt-1">
-      This invitation is for <strong class="font-medium text-slate-900">{{ invitation.email }}</strong>.
+      This invitation is for <strong class="font-medium text-ink">{{ invitation.email }}</strong>.
       After signing in you can enroll your device, view your captures, and delete any complete interval.
     </p>
     {% if error %}<p class="notice-error mt-5">{{ error }}</p>{% endif %}
@@ -16,7 +17,7 @@
       <label class="field">
         <span class="field-label">Password</span>
         <input class="input" name="password" type="password" autocomplete="new-password" minlength="12" required>
-        <span class="text-xs text-slate-500">At least 12 characters.</span>
+        <span class="text-xs text-muted">At least 12 characters.</span>
       </label>
       <label class="field">
         <span class="field-label">Confirm password</span>
@@ -32,4 +33,5 @@
     {% endif %}
   </div>
 </section>
+</div>
 {% endblock %}

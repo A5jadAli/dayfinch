@@ -12,3 +12,4 @@ dist/
 runtime/
 agent.toml
 node_modules/
+.visual-audit/
