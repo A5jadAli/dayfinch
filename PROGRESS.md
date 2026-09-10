@@ -173,3 +173,7 @@ docker compose build
 The manual OS, provider, S3, backup, outage, browser, and capacity release gates are
 in `docs/testing-playbook.md`; the authoritative remaining release register is
 `docs/production-readiness.md`.
+
+## Checkpoint log
+
+- 2026-09-10 — WI-1 — DONE — The opt-in Compose override started Mailpit and a versioned MinIO bucket; a Dayfinch invitation and non-null-version screenshot object were both verified locally.

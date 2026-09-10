@@ -18,6 +18,28 @@ npm run build:css
 python -m pip wheel . --no-deps --no-build-isolation
 ```
 
+## Local Mailpit and MinIO stand-ins
+
+The opt-in `compose.local.yaml` override runs Mailpit and a private MinIO bucket for
+local testing only. It does not change the default Compose or production settings.
+The MinIO initializer creates `dayfinch-local-screenshots` and explicitly enables
+bucket versioning. Start the complete local stack with:
+
+```bash
+docker compose -f compose.yaml -f compose.local.yaml up --build -d
+```
+
+Open Mailpit at <http://127.0.0.1:8025> and the MinIO console at
+<http://127.0.0.1:9001>. The local MinIO credentials default to `dayfinch-local` /
+`dayfinch-local-password`; they are stand-in credentials, not production secrets.
+After creating an invitation in Dayfinch, its message must appear in Mailpit. After
+an enrolled desktop device uploads a capture, its object must appear under the
+versioned MinIO bucket. Stop the stand-ins without deleting their volumes with:
+
+```bash
+docker compose -f compose.yaml -f compose.local.yaml down
+```
+
 With metrics enabled, scrape every replica and exercise a 2xx, 4xx, 5xx, successful
 job, failed job, and skipped lease. Confirm correlation IDs join proxy and Dayfinch
 logs, route labels contain templates rather than record IDs, request/query content is
