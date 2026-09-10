@@ -177,3 +177,4 @@ in `docs/testing-playbook.md`; the authoritative remaining release register is
 ## Checkpoint log
 
 - 2026-09-10 — WI-1 — DONE — The opt-in Compose override started Mailpit and a versioned MinIO bucket; a Dayfinch invitation and non-null-version screenshot object were both verified locally.
+- 2026-09-10 — WI-2 — DONE — Opt-in local E2E passed invitation delivery/acceptance, project assignment, UI enrollment, source-agent usage and screenshot upload to versioned MinIO, admin visibility, revocation rejection, re-enrollment, and cross-employee denial.

@@ -34,7 +34,22 @@ Open Mailpit at <http://127.0.0.1:8025> and the MinIO console at
 `dayfinch-local-password`; they are stand-in credentials, not production secrets.
 After creating an invitation in Dayfinch, its message must appear in Mailpit. After
 an enrolled desktop device uploads a capture, its object must appear under the
-versioned MinIO bucket. Stop the stand-ins without deleting their volumes with:
+versioned MinIO bucket.
+
+Run the opt-in invitation-to-first-screenshot test after the stack is healthy:
+
+```bash
+docker compose exec postgres createdb -U dayfinch dayfinch_test || true
+set -a; . .env; set +a
+export TRACKER_TEST_DATABASE_URL="postgresql://dayfinch:${POSTGRES_PASSWORD}@127.0.0.1:5433/dayfinch_test"
+DAYFINCH_LOCAL_E2E=1 .venv/bin/python -m pytest -m local_e2e tests/test_local_onboarding_e2e.py
+```
+
+This test uses Mailpit, MinIO, and a synthetic frame/activity source that exists
+only inside the pytest module. It never grants OS capture permission and cannot be
+enabled through a production configuration or packaged build.
+
+Stop the stand-ins without deleting their volumes with:
 
 ```bash
 docker compose -f compose.yaml -f compose.local.yaml down

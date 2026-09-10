@@ -56,6 +56,9 @@ ui = ["templates/*.html", "static/*.css", "static/*.js", "static/*.svg", "static
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "local_e2e: opt-in tests that require the local Mailpit and MinIO stand-ins",
+]
 
 [tool.ruff]
 target-version = "py311"
