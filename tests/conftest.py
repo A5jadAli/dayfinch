@@ -22,7 +22,7 @@ def postgres_url() -> str:
     with cleaner.connect() as connection:
         connection.execute(
             """TRUNCATE TABLE
-                   saml_assertion_replays, background_job_leases, login_attempts, scheduled_reports,
+                   request_rate_limits, saml_assertion_replays, background_job_leases, login_attempts, scheduled_reports,
                    saved_report_filters,
                    jira_worklog_exports, jira_worklog_dirty_days,
                    jira_user_authorization_periods, jira_user_connections,

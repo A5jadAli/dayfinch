@@ -19,7 +19,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 from . import __version__
 from .config import Settings
 from .database import Database
-from .middleware import SecurityHeadersMiddleware
+from .middleware import RequestRateLimitMiddleware, SecurityHeadersMiddleware
 from .observability import MetricsRegistry, ObservabilityMiddleware, configure_logging
 from .routers.agent_api import router as agent_api_router
 from .routers.auth import router as auth_router
@@ -324,6 +324,14 @@ def create_app(
     app.state.templates = templates
     app.state.asset_version = asset_version
     app.state.dummy_password_hash = hash_password("invalid-password-for-timing-only")
+    # Added before SessionMiddleware so Starlette places this inside the signed
+    # session decoder; request buckets can then distinguish authenticated users.
+    app.add_middleware(
+        RequestRateLimitMiddleware,
+        database=database,
+        settings=settings,
+        secret=settings.session_secret,
+    )
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.session_secret,

@@ -36,6 +36,9 @@ class RetentionService:
             # but must not extend app/domain/GPS retention indefinitely.
             self.database.delete_state_events_before(cutoff)
             self.database.delete_context_events_before(cutoff)
+            self.database.purge_request_limits_before(
+                datetime.now(UTC) - timedelta(days=7)
+            )
             audit_cutoff = datetime.now(UTC) - timedelta(days=self.audit_retention_days)
             audit_deleted = self.database.purge_audit_events(audit_cutoff)
             if audit_deleted:

@@ -70,6 +70,11 @@ class Settings:
     login_window_minutes: int = 15
     login_identity_failure_limit: int = 8
     login_source_failure_limit: int = 50
+    rate_limit_window_seconds: int = 60
+    anonymous_request_limit: int = 120
+    web_request_limit: int = 600
+    device_request_limit: int = 600
+    device_replay_request_limit: int = 6000
     storage_backend: str = "local"
     s3_bucket: str = ""
     s3_region: str = "us-east-1"
@@ -196,6 +201,22 @@ class Settings:
             login_source_failure_limit=min(
                 max(10, int(os.getenv("TRACKER_LOGIN_SOURCE_FAILURE_LIMIT", "50"))),
                 1000,
+            ),
+            rate_limit_window_seconds=min(
+                max(1, int(os.getenv("TRACKER_RATE_LIMIT_WINDOW_SECONDS", "60"))),
+                3600,
+            ),
+            anonymous_request_limit=max(
+                1, int(os.getenv("TRACKER_ANONYMOUS_REQUEST_LIMIT", "120"))
+            ),
+            web_request_limit=max(
+                1, int(os.getenv("TRACKER_WEB_REQUEST_LIMIT", "600"))
+            ),
+            device_request_limit=max(
+                1, int(os.getenv("TRACKER_DEVICE_REQUEST_LIMIT", "600"))
+            ),
+            device_replay_request_limit=max(
+                1, int(os.getenv("TRACKER_DEVICE_REPLAY_REQUEST_LIMIT", "6000"))
             ),
             storage_backend=os.getenv("TRACKER_STORAGE_BACKEND", "local")
             .strip()

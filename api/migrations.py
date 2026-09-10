@@ -2415,6 +2415,17 @@ def _create_wise_payroll_webhook_queue(connection: Connection) -> None:
     )
 
 
+def _create_request_rate_limits(connection: Connection) -> None:
+    connection.execute(
+        """CREATE TABLE IF NOT EXISTS request_rate_limits (
+               bucket_key TEXT PRIMARY KEY,
+               window_id BIGINT NOT NULL,
+               request_count INTEGER NOT NULL CHECK(request_count > 0),
+               updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+           );
+           CREATE INDEX IF NOT EXISTS idx_request_rate_limits_updated
+           ON request_rate_limits(updated_at);"""
+    )
 
 
 MIGRATIONS = (
@@ -2562,6 +2573,7 @@ MIGRATIONS = (
         "create_wise_payroll_webhook_queue",
         _create_wise_payroll_webhook_queue,
     ),
+    Migration(61, "create_request_rate_limits", _create_request_rate_limits),
 )
 
 

@@ -17,6 +17,7 @@ from .repositories.background_jobs import BackgroundJobsRepository
 from .repositories.devices import DevicesRepository
 from .repositories.integrations import IntegrationsRepository
 from .repositories.projects import ProjectsRepository
+from .repositories.rate_limits import RateLimitsRepository
 from .repositories.timesheets import TimesheetRepository
 from .repositories.work import WorkRepository
 from .repositories.workforce import WorkforceRepository
@@ -50,6 +51,7 @@ class Database(
     WorkRepository,
     TimesheetRepository,
     WorkforceRepository,
+    RateLimitsRepository,
 ):
     """PostgreSQL connection-pool owner and repository facade."""
 

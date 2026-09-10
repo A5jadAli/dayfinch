@@ -60,6 +60,18 @@ job, failed job, and skipped lease. Confirm correlation IDs join proxy and Dayfi
 logs, route labels contain templates rather than record IDs, request/query content is
 absent, and alerts fire for readiness failure, sustained 5xx rate, and job failures.
 
+Request throttling uses a PostgreSQL fixed-window bucket, so all replicas share the
+same count. Defaults are 120 anonymous, 600 signed-in web, and 600 ordinary device
+requests per 60 seconds. Heartbeat, usage, location, and screenshot replay uses a
+separate 6,000-request allowance so a legitimate encrypted offline queue can drain.
+`Retry-After` reports the remaining window. Health, liveness, readiness, metrics,
+and static assets are exempt. Configure the values with the matching
+`TRACKER_*_REQUEST_LIMIT` and `TRACKER_RATE_LIMIT_WINDOW_SECONDS` variables in
+`.env.example`. Anonymous buckets use the client address supplied by the ASGI
+server; a reverse proxy must forward client addresses only from trusted proxy
+networks, otherwise all anonymous traffic will deliberately share the proxy's
+conservative bucket.
+
 With a local server running, exercise every authenticated page in real Chrome at
 desktop and 390px widths, in both themes. The audit fails on body overflow,
 missing SVG symbols, unlabeled interactive controls, redirects, or theme errors,
