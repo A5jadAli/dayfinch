@@ -1,0 +1,81 @@
+groups:
+  - name: dayfinch.availability
+    rules:
+      - alert: DayfinchTargetDown
+        expr: up{job="dayfinch"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Dayfinch target is not being scraped
+          description: Prometheus has been unable to scrape a Dayfinch instance for two minutes.
+      - alert: DayfinchNotReady
+        expr: dayfinch_readiness == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: Dayfinch is not ready
+          description: The readiness probe cannot complete its PostgreSQL check.
+      - alert: DayfinchMetricsCollectionFailed
+        expr: dayfinch_metrics_collection_success == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Dayfinch database metrics collection is failing
+          description: HTTP counters remain available, but durable queue depths could not be refreshed.
+
+  - name: dayfinch.requests
+    rules:
+      - alert: DayfinchHighErrorRate
+        expr: |
+          sum(rate(dayfinch_http_requests_total{status=~"5.."}[5m]))
+          /
+          clamp_min(sum(rate(dayfinch_http_requests_total[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Dayfinch HTTP 5xx rate is above 5%
+          description: The aggregate five-minute server error ratio has remained high for ten minutes.
+      - alert: DayfinchHighMeanLatency
+        expr: |
+          sum(rate(dayfinch_http_request_duration_seconds_sum[5m]))
+          /
+          clamp_min(sum(rate(dayfinch_http_request_duration_seconds_count[5m])), 0.001)
+          > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Dayfinch mean HTTP latency is above one second
+          description: The application exports sums and counts, so this starter alert measures mean rather than percentile latency.
+      - alert: DayfinchScreenshotIngestFailures
+        expr: |
+          sum(rate(dayfinch_http_requests_total{route="/api/v1/activity",status=~"5.."}[5m])) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Dayfinch screenshot ingestion is returning server errors
+          description: Desktop agents will retain encrypted captures locally and retry, but storage or database recovery is required.
+
+  - name: dayfinch.workers
+    rules:
+      - alert: DayfinchBackgroundJobFailures
+        expr: increase(dayfinch_background_jobs_total{outcome="failed"}[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: A Dayfinch background job failed
+          description: Inspect the job label and structured logs before the next retry.
+      - alert: DayfinchQueueBacklogHigh
+        expr: dayfinch_queue_backlog > 100
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: A Dayfinch durable queue has more than 100 pending items
+          description: Inspect the queue label, provider health, credentials, and job failures.

@@ -87,6 +87,10 @@ class MetricsRegistry:
             key = self._key(name, labels)
             self._gauges[key] = max(0, self._gauges[key] + delta)
 
+    def set_gauge(self, name: str, value: float, **labels: object) -> None:
+        with self._lock:
+            self._gauges[self._key(name, labels)] = value
+
     def render(self) -> str:
         with self._lock:
             samples = [*self._counters.items(), *self._gauges.items()]

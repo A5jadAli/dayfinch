@@ -4,6 +4,31 @@ from .base import RepositoryMixin
 
 
 class BackgroundJobsRepository(RepositoryMixin):
+    def monitoring_backlogs(self) -> dict[str, int]:
+        """Return only aggregate durable-queue depths for Prometheus."""
+        with self.connect() as connection:
+            row = connection.execute(
+                """SELECT
+                     (SELECT COUNT(*) FROM jira_worklog_dirty_days)
+                       AS jira_worklog_dirty,
+                     (SELECT COUNT(*) FROM jira_worklog_exports
+                       WHERE synced_at IS NULL
+                          OR synced_seconds IS DISTINCT FROM desired_seconds
+                          OR synced_started_at IS DISTINCT FROM desired_started_at)
+                       AS jira_worklog_outbox,
+                     (SELECT COUNT(*) FROM asana_comment_dirty_days)
+                       AS asana_comment_dirty,
+                     (SELECT COUNT(*) FROM asana_comment_exports
+                       WHERE synced_at IS NULL
+                          OR synced_seconds IS DISTINCT FROM desired_seconds
+                          OR synced_started_at IS DISTINCT FROM desired_started_at)
+                       AS asana_comment_outbox,
+                     (SELECT COUNT(*) FROM slack_outbox
+                       WHERE sent_at IS NULL AND discarded_at IS NULL)
+                       AS slack_outbox"""
+            ).fetchone()
+        return {name: int(value) for name, value in row.items()}
+
     def claim_background_job(
         self, name: str, owner_id: str, lease_seconds: int
     ) -> bool:

@@ -199,6 +199,9 @@ curl -H "Authorization: Bearer $TRACKER_METRICS_BEARER_TOKEN" \
   http://127.0.0.1:8000/metrics
 ```
 
+Vendor-neutral Prometheus alert rules and an importable Grafana dashboard are in
+`deploy/monitoring/`; deployment and metric limitations are documented there.
+
 Scrape every API replica because counters are process-local. Alerting and exception
 aggregation belong in the deployment platform and remain a production release gate.
 

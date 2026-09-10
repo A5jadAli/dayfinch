@@ -394,11 +394,13 @@ def create_app(
         try:
             database.ping()
         except Exception as exc:
+            metrics.set_gauge("dayfinch_readiness", 0)
             LOGGER.error(
                 "readiness_check_failed",
                 extra={"exception_type": type(exc).__name__},
             )
             return JSONResponse({"status": "unavailable"}, status_code=503)
+        metrics.set_gauge("dayfinch_readiness", 1)
         return JSONResponse({"status": "ready"})
 
     @app.get("/metrics", include_in_schema=False)
@@ -407,6 +409,18 @@ def create_app(
         supplied = authorization.removeprefix("Bearer ")
         if not expected or not secrets.compare_digest(supplied, expected):
             return Response(status_code=404)
+        try:
+            for queue, depth in database.monitoring_backlogs().items():
+                metrics.set_gauge(
+                    "dayfinch_queue_backlog", depth, queue=queue
+                )
+            metrics.set_gauge("dayfinch_metrics_collection_success", 1)
+        except Exception as exc:
+            metrics.set_gauge("dayfinch_metrics_collection_success", 0)
+            LOGGER.error(
+                "metrics_database_collection_failed",
+                extra={"exception_type": type(exc).__name__},
+            )
         return Response(
             metrics.render(),
             media_type="text/plain; version=0.0.4; charset=utf-8",

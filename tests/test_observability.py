@@ -54,6 +54,13 @@ def test_invalid_request_id_is_replaced():
     assert len(response.headers["X-Request-ID"]) == 36
 
 
+def test_metrics_registry_can_replace_an_absolute_gauge():
+    metrics = MetricsRegistry()
+    metrics.set_gauge("dayfinch_readiness", 1)
+    metrics.set_gauge("dayfinch_readiness", 0)
+    assert "dayfinch_readiness 0" in metrics.render()
+
+
 def test_json_formatter_emits_structured_scalar_fields_only():
     record = logging.LogRecord(
         "dayfinch.test", logging.INFO, __file__, 1, "event", (), None

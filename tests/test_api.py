@@ -43,6 +43,9 @@ def test_agent_authentication_and_idempotent_upload(tmp_path, postgres_url):
         )
         assert metrics.status_code == 200
         assert "dayfinch_http_requests_total" in metrics.text
+        assert "dayfinch_readiness 1" in metrics.text
+        assert "dayfinch_metrics_collection_success 1" in metrics.text
+        assert 'dayfinch_queue_backlog{queue="slack_outbox"} 0' in metrics.text
         assert (
             client.get("/health", headers={"host": "untrusted.test"}).status_code == 400
         )

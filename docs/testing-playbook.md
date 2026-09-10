@@ -59,6 +59,8 @@ With metrics enabled, scrape every replica and exercise a 2xx, 4xx, 5xx, success
 job, failed job, and skipped lease. Confirm correlation IDs join proxy and Dayfinch
 logs, route labels contain templates rather than record IDs, request/query content is
 absent, and alerts fire for readiness failure, sustained 5xx rate, and job failures.
+Validate and tune the starter rules and dashboard in `deploy/monitoring/`; its
+README records the exact `promtool` and JSON validation commands.
 
 Request throttling uses a PostgreSQL fixed-window bucket, so all replicas share the
 same count. Defaults are 120 anonymous, 600 signed-in web, and 600 ordinary device
