@@ -8,21 +8,25 @@ version = "0.6.0"
 description = "Consent-based screenshot and aggregate activity tracker"
 requires-python = ">=3.11"
 dependencies = [
+  "authlib>=1.7,<2",
   "cryptography>=45,<47",
   "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "httpx2>=2.12,<3",
   "itsdangerous>=2.2,<3",
   "jinja2>=3.1,<4",
   "pydantic>=2.10,<3",
   "python-multipart>=0.0.20,<1",
+  "reportlab>=4.3,<5",
   "psycopg[binary]>=3.2,<4",
   "psycopg-pool>=3.2,<4",
+  "signxml>=5.1,<6",
   "uvicorn[standard]>=0.34,<1",
 ]
 
 [project.optional-dependencies]
 agent = [
   "dbus-next>=0.2,<1; sys_platform == 'linux'",
-  "httpx>=0.28,<1",
   "mss>=10,<11",
   "pillow>=11,<13",
   "psutil>=6,<8",
@@ -30,7 +34,6 @@ agent = [
   "pystray>=0.19,<1",
 ]
 dev = [
-  "httpx>=0.28,<1",
   "pytest>=8,<10",
   "pytest-cov>=6,<8",
   "ruff>=0.12,<1",
@@ -41,9 +44,11 @@ s3 = ["boto3>=1.42,<2"]
 [project.scripts]
 dayfinch-server = "api.main:run"
 dayfinch-agent = "agent.main:run"
+dayfinch-ops = "scripts.backup_restore:main"
+dayfinch-load-test = "scripts.load_test:main"
 
 [tool.setuptools.packages.find]
-include = ["api*", "agent*", "ui*"]
+include = ["api*", "agent*", "ui*", "scripts*"]
 
 [tool.setuptools.package-data]
 ui = ["templates/*.html", "static/*.css", "static/*.js", "static/*.svg", "static/*.webmanifest"]

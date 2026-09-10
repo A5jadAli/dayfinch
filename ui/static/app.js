@@ -38,6 +38,34 @@
     setTheme(html.dataset.theme === "dark" ? "light" : "dark");
   });
 
+  /* --- One-time setup credentials -------------------------------------- */
+  document.querySelectorAll("[data-copy-target]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const field = document.getElementById(button.dataset.copyTarget);
+      if (!field) return;
+      try {
+        await navigator.clipboard.writeText(field.value);
+        button.textContent = "Copied";
+      } catch (_error) {
+        field.select();
+        document.execCommand("copy");
+        button.textContent = "Copied";
+      }
+    });
+  });
+
+  document.querySelectorAll("[data-download-target]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const field = document.getElementById(button.dataset.downloadTarget);
+      if (!field) return;
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(new Blob([field.value + "\n"], { type: "application/toml" }));
+      link.download = button.dataset.filename || "agent.toml";
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+  });
+
   /* --- Mobile drawer ---------------------------------------------------- */
   const sidebar = document.getElementById("sidebar");
   const scrim = document.getElementById("scrim");
@@ -106,6 +134,19 @@
   };
 
   if (!reduced.matches) document.querySelectorAll("[data-count]").forEach(countUp);
+
+  /* --- Scheduled report cadence ---------------------------------------- */
+  const reportFrequency = document.querySelector("[data-report-frequency]");
+  if (reportFrequency) {
+    const weekday = document.querySelector("[data-report-weekday]");
+    const monthDay = document.querySelector("[data-report-month-day]");
+    const showRelevantAnchor = () => {
+      if (weekday) weekday.hidden = reportFrequency.value !== "weekly";
+      if (monthDay) monthDay.hidden = reportFrequency.value !== "monthly";
+    };
+    reportFrequency.addEventListener("change", showRelevantAnchor);
+    showRelevantAnchor();
+  }
 
   /* --- Live timer ------------------------------------------------------- */
   /* Tick the running timer forward from the server-rendered seconds so the

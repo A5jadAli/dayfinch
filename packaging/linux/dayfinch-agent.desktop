@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Dayfinch Tracker
+Comment=Visible employee time and activity tracker
+Exec=dayfinch-agent
+Icon=dayfinch-agent
+Terminal=false
+Categories=Office;Utility;
+StartupNotify=true

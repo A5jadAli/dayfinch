@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import date
 from typing import Any
 
@@ -56,9 +55,3 @@ class TimesheetService:
             note,
         )
         return timesheet
-
-
-async def run_timesheet_generation_worker(database: Database) -> None:
-    while True:
-        await asyncio.to_thread(database.generate_open_timesheets)
-        await asyncio.sleep(6 * 60 * 60)

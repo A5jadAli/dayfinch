@@ -43,14 +43,37 @@ class WorkRepository(RepositoryMixin):
         return task
 
     def list_tasks(
-        self, project_id: str, *, include_archived: bool = False
+        self,
+        project_id: str,
+        *,
+        include_archived: bool = False,
+        user_id: str | None = None,
     ) -> list[dict[str, Any]]:
-        status_filter = "" if include_archived else "AND status = 'active'"
+        status_filter = "" if include_archived else "AND t.status = 'active'"
+        assignment_filter = ""
+        parameters: list[Any] = [project_id]
+        if user_id is not None:
+            assignment_filter = """AND (
+                i.provider IS DISTINCT FROM 'asana' OR i.enabled=FALSE
+                OR t.external_read_only=FALSE OR EXISTS(
+                    SELECT 1 FROM asana_task_assignees a
+                    JOIN asana_user_connections c
+                      ON c.integration_id=a.integration_id
+                     AND c.asana_user_gid=a.asana_user_gid
+                    WHERE a.integration_id=t.integration_id
+                      AND a.external_project_id=t.external_container_key
+                      AND a.external_task_gid=t.external_display_key
+                      AND c.user_id=%s AND c.enabled=TRUE
+                )
+            )"""
+            parameters.append(user_id)
         with self.connect() as connection:
             rows = connection.execute(
-                f"""SELECT * FROM tasks WHERE project_id = %s {status_filter}
-                    ORDER BY lower(name)""",
-                (project_id,),
+                f"""SELECT t.*,i.provider external_provider FROM tasks t
+                    LEFT JOIN integrations i ON i.id=t.integration_id
+                    WHERE t.project_id = %s {status_filter} {assignment_filter}
+                    ORDER BY lower(t.name)""",
+                tuple(parameters),
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -65,9 +88,41 @@ class WorkRepository(RepositoryMixin):
         if task_status not in {"active", "archived"}:
             raise ValueError("Invalid task status")
         with self.connect() as connection:
+            task = connection.execute(
+                "SELECT external_read_only FROM tasks WHERE id=%s FOR UPDATE",
+                (task_id,),
+            ).fetchone()
+            if not task:
+                raise ValueError("Task not found")
+            if task["external_read_only"]:
+                raise ValueError("This task is managed by an external integration")
             connection.execute(
                 "UPDATE tasks SET status=%s WHERE id=%s", (task_status, task_id)
             )
+            if task_status == "archived":
+                observed_at = utc_now()
+                connection.execute(
+                    """UPDATE work_session_segments SET ended_at=%s
+                       WHERE session_id IN (
+                           SELECT id FROM work_sessions
+                           WHERE task_id=%s AND ended_at IS NULL
+                       ) AND ended_at IS NULL""",
+                    (observed_at, task_id),
+                )
+                connection.execute(
+                    """UPDATE work_breaks SET ended_at=%s
+                       WHERE session_id IN (
+                           SELECT id FROM work_sessions
+                           WHERE task_id=%s AND ended_at IS NULL
+                       ) AND ended_at IS NULL""",
+                    (observed_at, task_id),
+                )
+                connection.execute(
+                    """UPDATE work_sessions
+                       SET status='stopped',ended_at=%s,updated_at=%s
+                       WHERE task_id=%s AND ended_at IS NULL""",
+                    (observed_at, observed_at, task_id),
+                )
 
     def sync_work_session(
         self,
@@ -81,6 +136,7 @@ class WorkRepository(RepositoryMixin):
         observed_at: datetime | None = None,
         idle_seconds: int = 0,
         heartbeat_interval_seconds: int = 60,
+        transition: bool = False,
     ) -> dict[str, Any] | None:
         if status not in {"active", "paused", "stopped"}:
             return None
@@ -97,6 +153,30 @@ class WorkRepository(RepositoryMixin):
             if device.get("owner_user_id")
             else None
         )
+        if status == "active" and owner and owner["role"] == "viewer":
+            raise ValueError("Project viewers cannot track time")
+        project_id = selected_project_id or device.get("project_id")
+        if status == "active":
+            if not owner:
+                raise ValueError("The device owner is unavailable")
+            with self.connect() as authorization_connection:
+                authorization = authorization_connection.execute(
+                    """SELECT p.enabled,pm.project_role
+                       FROM projects p
+                       LEFT JOIN project_members pm
+                         ON pm.project_id=p.id AND pm.user_id=%s
+                       WHERE p.id=%s""",
+                    (owner["id"], project_id),
+                ).fetchone()
+            if not authorization or not authorization["enabled"]:
+                raise ValueError("The selected project is unavailable")
+            if owner["role"] == "member" and authorization["project_role"] not in {
+                "worker",
+                "manager",
+            }:
+                raise ValueError(
+                    "This member cannot track time for the selected project"
+                )
         if status == "active" and owner and owner["role"] == "member":
             check_date = (observed_at or datetime.now(UTC)).date()
             with self.connect() as limit_connection:
@@ -117,14 +197,6 @@ class WorkRepository(RepositoryMixin):
                 and limits["weekly"] >= owner["weekly_limit_minutes"]
             ):
                 raise ValueError("Weekly tracking limit reached")
-        project_id = selected_project_id or device.get("project_id")
-        if (
-            selected_project_id
-            and owner
-            and owner["role"] not in {"admin", "manager"}
-            and not self.is_project_member(project_id, owner["id"])
-        ):
-            raise ValueError("Project is not assigned to this member")
         if task_id:
             task = self.get_task(task_id)
             if not task or task["status"] != "active":
@@ -142,6 +214,34 @@ class WorkRepository(RepositoryMixin):
         observed = observed.astimezone(UTC)
         now = utc_now()
         with self.connect() as connection:
+            if (
+                status == "active"
+                and owner
+                and device.get("tracker_kind", "desktop") != "desktop"
+            ):
+                connection.execute(
+                    "SELECT pg_advisory_xact_lock_shared(hashtext(%s))",
+                    ("dayfinch:allowed-apps:global",),
+                )
+                connection.execute(
+                    "SELECT pg_advisory_xact_lock_shared(hashtext(%s))",
+                    (f"dayfinch:allowed-apps:{owner['id']}",),
+                )
+                allowed_apps = connection.execute(
+                    """SELECT COALESCE(member.allowed_apps,organization.allowed_apps)
+                              AS allowed_apps
+                       FROM organization_settings organization
+                       LEFT JOIN user_tracking_settings member ON member.user_id=%s
+                       WHERE organization.id=1""",
+                    (owner["id"],),
+                ).fetchone()["allowed_apps"]
+                if allowed_apps == "desktop_only":
+                    raise ValueError("Desktop tracking is required by policy")
+            if device.get("owner_user_id"):
+                connection.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    (f"dayfinch:active-timer:{device['owner_user_id']}",),
+                )
             connection.execute(
                 "SELECT id FROM devices WHERE id = %s FOR UPDATE", (device["id"],)
             )
@@ -176,6 +276,24 @@ class WorkRepository(RepositoryMixin):
                    ORDER BY started_at DESC LIMIT 1""",
                 (device["id"],),
             ).fetchone()
+            if status in {"active", "paused"} and device.get("owner_user_id"):
+                other = connection.execute(
+                    """SELECT * FROM work_sessions
+                       WHERE user_id=%s AND device_id<>%s
+                         AND status IN ('active','paused')
+                       ORDER BY started_at DESC LIMIT 1 FOR UPDATE""",
+                    (device["owner_user_id"], device["id"]),
+                ).fetchone()
+                if other:
+                    if not transition:
+                        raise ValueError(
+                            "Another device is tracking; press Start to switch devices"
+                        )
+                    if observed < datetime.fromisoformat(other["started_at"]):
+                        raise ValueError(
+                            "Another device is already tracking newer time"
+                        )
+                    self._stop_session(connection, other["id"], observed)
             # A run of journalled heartbeats proves continuous offline work. A gap
             # means the process or computer was down, so cap the previous segment
             # at one heartbeat after its last durable observation.

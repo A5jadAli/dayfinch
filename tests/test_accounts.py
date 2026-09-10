@@ -1,4 +1,6 @@
 import re
+from dataclasses import replace
+from datetime import UTC, datetime
 
 from fastapi.testclient import TestClient
 
@@ -62,8 +64,21 @@ def test_member_can_delete_own_interval_but_cannot_invite(tmp_path, postgres_url
         member = database.accept_invitation(
             invite_token, hash_password("member password long enough")
         )
-        device, device_token = database.create_device("Member laptop", member["id"])
-        other_device, _ = database.create_device("Someone else's laptop", admin["id"])
+        project = database.create_project("Member project", "", admin["id"])
+        database.add_project_member(project["id"], member["id"])
+        device, device_token = database.create_device(
+            "Member laptop", member["id"], project["id"]
+        )
+        database.sync_work_session(
+            device,
+            "active",
+            None,
+            project["id"],
+            observed_at=datetime(2026, 7, 27, 10, 0, tzinfo=UTC),
+        )
+        other_device, _ = database.create_device(
+            "Someone else's laptop", admin["id"], project["id"]
+        )
 
         payload = {
             "record_id": "7e814da1-abf7-46e6-b116-30facaa96993",
@@ -140,3 +155,144 @@ def test_admin_can_create_invitation_link(tmp_path, postgres_url):
         assert response.status_code == 200
         assert "new@example.test" in response.text
         assert "/invite/" in response.text
+        assert "SMTP is not configured" in response.text
+        assert "http://127.0.0.1:8000/invite/" in response.text
+
+
+def test_repeated_login_failures_are_throttled_across_requests(tmp_path, postgres_url):
+    settings = replace(
+        _settings(tmp_path, postgres_url),
+        login_identity_failure_limit=3,
+        login_source_failure_limit=50,
+        login_window_minutes=15,
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        for _ in range(3):
+            failed = client.post(
+                "/login",
+                data={
+                    "email": settings.admin_email,
+                    "password": "wrong password entirely",
+                    "csrf": _csrf(client.get("/login")),
+                },
+            )
+            assert failed.status_code == 401
+
+        blocked = client.post(
+            "/login",
+            data={
+                "email": settings.admin_email,
+                "password": settings.admin_password,
+                "csrf": _csrf(client.get("/login")),
+            },
+        )
+        assert blocked.status_code == 429
+        assert blocked.headers["retry-after"] == "900"
+        assert "Too many sign-in attempts" in blocked.text
+
+
+def test_successful_login_clears_identity_failures(tmp_path, postgres_url):
+    settings = _settings(tmp_path, postgres_url)
+    app = create_app(settings)
+    with TestClient(app) as client:
+        failed = client.post(
+            "/login",
+            data={
+                "email": settings.admin_email,
+                "password": "wrong password entirely",
+                "csrf": _csrf(client.get("/login")),
+            },
+        )
+        assert failed.status_code == 401
+
+        succeeded = client.post(
+            "/login",
+            data={
+                "email": settings.admin_email,
+                "password": settings.admin_password,
+                "csrf": _csrf(client.get("/login")),
+            },
+            follow_redirects=False,
+        )
+        assert succeeded.status_code == 303
+        with app.state.database.connect() as connection:
+            assert (
+                connection.execute(
+                    "SELECT COUNT(*) count FROM login_attempts"
+                ).fetchone()["count"]
+                == 0
+            )
+
+
+def test_two_factor_codes_are_throttled_after_password_authentication(
+    tmp_path, postgres_url, monkeypatch
+):
+    settings = replace(
+        _settings(tmp_path, postgres_url),
+        login_identity_failure_limit=3,
+        login_source_failure_limit=50,
+    )
+    app = create_app(settings)
+    monkeypatch.setattr("api.routers.auth.verify_totp", lambda *_args: False)
+    with TestClient(app) as client:
+        admin = app.state.database.get_user_by_email(settings.admin_email)
+        app.state.database.set_two_factor_secret(
+            admin["id"], "JBSWY3DPEHPK3PXP", enabled=True
+        )
+        login = client.post(
+            "/login",
+            data={
+                "email": settings.admin_email,
+                "password": settings.admin_password,
+                "csrf": _csrf(client.get("/login")),
+            },
+            follow_redirects=False,
+        )
+        assert login.headers["location"] == "/two-factor"
+
+        for _ in range(3):
+            page = client.get("/two-factor")
+            failed = client.post(
+                "/two-factor", data={"code": "000000", "csrf": _csrf(page)}
+            )
+            assert failed.status_code == 401
+
+        page = client.get("/two-factor")
+        blocked = client.post(
+            "/two-factor", data={"code": "000000", "csrf": _csrf(page)}
+        )
+        assert blocked.status_code == 429
+        assert blocked.headers["retry-after"] == "900"
+        assert "Too many authentication-code attempts" in blocked.text
+
+
+def test_metadata_only_provider_integrations_are_not_exposed(tmp_path, postgres_url):
+    settings = _settings(tmp_path, postgres_url)
+    app = create_app(settings)
+    with TestClient(app) as client:
+        login_page = client.get("/login")
+        login = client.post(
+            "/login",
+            data={
+                "email": settings.admin_email,
+                "password": settings.admin_password,
+                "csrf": _csrf(login_page),
+            },
+            follow_redirects=False,
+        )
+        assert login.status_code == 303
+        settings_page = client.get("/settings")
+        assert "Jira" not in settings_page.text
+        assert "QuickBooks" not in settings_page.text
+        assert (
+            client.post(
+                "/integrations",
+                data={
+                    "provider": "Jira",
+                    "display_name": "Fake connection",
+                    "csrf": _csrf(settings_page),
+                },
+            ).status_code
+            == 404
+        )

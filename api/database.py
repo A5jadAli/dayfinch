@@ -12,7 +12,10 @@ from .migrations import apply_migrations
 from .repositories.accounts import AccountsRepository
 from .repositories.activity import ActivityRepository
 from .repositories.audit import AuditRepository
+from .repositories.automatic_tracking import AutomaticTrackingRepository
+from .repositories.background_jobs import BackgroundJobsRepository
 from .repositories.devices import DevicesRepository
+from .repositories.integrations import IntegrationsRepository
 from .repositories.projects import ProjectsRepository
 from .repositories.timesheets import TimesheetRepository
 from .repositories.work import WorkRepository
@@ -37,10 +40,13 @@ def normalized_dict_row(cursor):
 
 class Database(
     AccountsRepository,
+    AutomaticTrackingRepository,
     ProjectsRepository,
     DevicesRepository,
+    IntegrationsRepository,
     ActivityRepository,
     AuditRepository,
+    BackgroundJobsRepository,
     WorkRepository,
     TimesheetRepository,
     WorkforceRepository,
@@ -70,3 +76,7 @@ class Database(
 
     def close(self) -> None:
         self.pool.close()
+
+    def ping(self) -> None:
+        with self.connect() as connection:
+            connection.execute("SELECT 1").fetchone()

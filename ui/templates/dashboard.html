@@ -8,12 +8,12 @@
   </div>
   <div class="flex gap-2">
     <a class="btn btn-secondary" href="/activity"><svg class="icon icon-sm"><use href="#i-camera"></use></svg> View activity</a>
-    <a class="btn btn-primary" href="/time-entries"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> Add time</a>
+    {% if can_track_time %}<a class="btn btn-primary" href="/time-entries"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> Add time</a>{% endif %}
   </div>
 </div>
 
 {# Timer hero. The aurora is decorative and sits behind the content, never over it. #}
-<section class="card relative isolate mt-6 overflow-hidden border-brand-line">
+{% if can_track_time and (web_timer_allowed or active_timer) %}<section class="card relative isolate mt-6 overflow-hidden border-brand-line">
   <span class="aurora -top-24 -right-16 h-64 w-64"></span>
   <div class="dotfield absolute inset-0 -z-10 text-brand/10"></div>
   <div class="card-body flex flex-wrap items-center justify-between gap-5">
@@ -34,18 +34,21 @@
     </div>
     {% if active_timer %}
     <div class="flex gap-2">
-      <form method="post" action="/timer/{{ 'resume' if active_timer.status == 'paused' else 'pause' }}"><input type="hidden" name="csrf" value="{{ csrf_token }}">
+      {% if web_timer_allowed or active_timer.status != 'paused' %}<form method="post" action="/timer/{{ 'resume' if active_timer.status == 'paused' else 'pause' }}"><input type="hidden" name="csrf" value="{{ csrf_token }}">
         <button class="btn btn-secondary"><svg class="icon icon-sm"><use href="#i-{{ 'play' if active_timer.status == 'paused' else 'pause' }}"></use></svg> {{ 'Resume' if active_timer.status == 'paused' else 'Break' }}</button></form>
+      {% endif %}
       <form method="post" action="/timer/stop"><input type="hidden" name="csrf" value="{{ csrf_token }}">
         <button class="btn btn-danger"><svg class="icon icon-sm"><use href="#i-stop"></use></svg> Stop timer</button></form>
     </div>
     {% else %}
     <form method="post" action="/timer/start" class="flex flex-wrap items-center gap-2"><input type="hidden" name="csrf" value="{{ csrf_token }}">
-      <select class="input w-52" name="project_id" aria-label="Project to track" required><option value="">Select project</option>{% for p in projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
+      <select class="input w-52" name="project_id" aria-label="Project to track" required><option value="">Select project</option>{% for p in trackable_projects %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}</select>
       <button class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-play"></use></svg> Start timer</button></form>
     {% endif %}
   </div>
 </section>
+{% elif can_track_time %}<section class="card card-body mt-6 border-brand-line"><div class="flex flex-wrap items-center justify-between gap-4"><div><p class="eyebrow">Desktop tracking required</p><h2 class="mt-2 text-xl font-semibold text-ink">Use the installed Dayfinch tracker</h2><p class="mt-1.5 text-sm text-muted">Your tracking policy disables browser and field timers so computer time includes desktop activity.</p></div>{% if trackable_projects %}<a class="btn btn-primary" href="/projects/{{ trackable_projects[0].id }}"><svg class="icon icon-sm"><use href="#i-window"></use></svg> Set up desktop tracker</a>{% endif %}</div></section>
+{% endif %}
 
 <section data-stagger-items class="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
   <article class="metric-card">
@@ -67,19 +70,19 @@
     <span class="metric-icon bg-info-tint text-info"><svg class="icon icon-lg"><use href="#i-users"></use></svg></span>
     <p class="metric-label mt-4">Working now</p>
     <p class="metric-value"><span data-count="{{ summary.active_members }}">{{ summary.active_members }}</span></p>
-    <p class="metric-note">Live desktop sessions</p>
+    <p class="metric-note">Active web and desktop sessions</p>
   </article>
 
-  {% set pending_total = summary.pending.timesheets + summary.pending.manual_time + summary.pending.time_off + summary.pending.expenses %}
+  {% if can_manage %}{% set pending_total = summary.pending.timesheets + summary.pending.manual_time + summary.pending.time_off + summary.pending.expenses %}
   <article class="metric-card">
     <span class="metric-icon bg-warn-tint text-warn"><svg class="icon icon-lg"><use href="#i-inbox"></use></svg></span>
     <p class="metric-label mt-4">Needs review</p>
     <p class="metric-value"><span data-count="{{ pending_total }}">{{ pending_total }}</span></p>
     <p class="metric-note">Time, leave, and expenses</p>
-  </article>
+  </article>{% endif %}
 </section>
 
-<div class="mt-5 grid gap-5 xl:grid-cols-[1.45fr_1fr]">
+<div class="mt-5 grid gap-5 {% if can_manage %}xl:grid-cols-[1.45fr_1fr]{% endif %}">
 
   {# Seven-day tracked time. One series, so no legend: the card title names it.
      Only the busiest day is labelled — a number on every bar is noise. #}
@@ -136,7 +139,7 @@
     </div>
   </section>
 
-  <section class="card">
+  {% if can_manage %}<section class="card">
     <div class="card-header"><div><h2 class="section-title">Approval inbox</h2><p class="muted">Items waiting for a decision</p></div></div>
     <div class="grid gap-2.5 p-5">
       {% for label, href, count, icon in [
@@ -150,7 +153,7 @@
       </a>
       {% endfor %}
     </div>
-  </section>
+  </section>{% endif %}
 </div>
 
 <section class="card mt-5">
@@ -213,21 +216,26 @@
   {% endif %}
 </section>
 
-{% if current_user.role in ['admin','manager'] %}
+{% if can_create_project or can_invite %}
 <div class="mt-5 grid gap-5 lg:grid-cols-2">
+  {% if can_create_project %}
   <section class="card card-body">
     <p class="eyebrow">Quick setup</p><h2 class="section-title mt-1.5">Create project</h2>
     <form method="post" action="/projects" class="mt-4 grid gap-3"><input type="hidden" name="csrf" value="{{ csrf_token }}">
       <input class="input" name="name" aria-label="Project name" placeholder="Project name" maxlength="100" required>
       <input class="input" name="description" aria-label="Project description" placeholder="Description" maxlength="500">
+      {% if project_creation_teams %}<select class="input" name="team_id" aria-label="Owning team" required><option value="">Choose team</option>{% for team in project_creation_teams %}<option value="{{ team.id }}">{{ team.name }}</option>{% endfor %}</select>{% endif %}
       <button class="btn btn-primary justify-self-start"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> Create project</button></form>
   </section>
+  {% endif %}
+  {% if can_invite %}
   <section class="card card-body">
     <p class="eyebrow">Grow the team</p><h2 class="section-title mt-1.5">Invite a person</h2>
     <form method="post" action="/invitations" class="mt-4 grid gap-3"><input type="hidden" name="csrf" value="{{ csrf_token }}">
       <input class="input" name="email" type="email" aria-label="Teammate email" placeholder="teammate@company.com" required>
       <button class="btn btn-primary justify-self-start"><svg class="icon icon-sm"><use href="#i-plus"></use></svg> Create invitation</button></form>
   </section>
+  {% endif %}
 </div>
 {% endif %}
 {% endblock %}

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import ipaddress
 import tomllib
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ class AgentConfig:
     server_url: str
     device_token: str
     consent_confirmed: bool
+    project_id: str = ""
     task_id: str = ""
     capture_interval_seconds: int = 600
     heartbeat_interval_seconds: int = 60
@@ -24,6 +26,9 @@ class AgentConfig:
     website_bridge_port: int = 8765
     max_queue_items: int = 500
     queue_dir: Path = Path("runtime/agent-queue")
+    update_manifest_url: str = ""
+    update_public_key: str = ""
+    update_mode: str = "notify"
 
     @classmethod
     def from_file(cls, path: Path) -> AgentConfig:
@@ -33,6 +38,7 @@ class AgentConfig:
             server_url=str(values.get("server_url", "")).rstrip("/"),
             device_token=str(values.get("device_token", "")),
             consent_confirmed=bool(values.get("consent_confirmed", False)),
+            project_id=str(values.get("project_id", "")).strip(),
             task_id=str(values.get("task_id", "")).strip(),
             capture_interval_seconds=int(values.get("capture_interval_seconds", 600)),
             heartbeat_interval_seconds=int(
@@ -49,6 +55,9 @@ class AgentConfig:
             queue_dir=(
                 path.parent / values.get("queue_dir", "runtime/agent-queue")
             ).resolve(),
+            update_manifest_url=str(values.get("update_manifest_url", "")).strip(),
+            update_public_key=str(values.get("update_public_key", "")).strip(),
+            update_mode=str(values.get("update_mode", "notify")).strip().lower(),
         )
         config.validate()
         return config
@@ -65,14 +74,19 @@ class AgentConfig:
             raise ValueError(
                 "Tracking is disabled until the device owner sets consent_confirmed = true"
             )
-        if self.task_id:
+        for field, value in (
+            ("project_id", self.project_id),
+            ("task_id", self.task_id),
+        ):
+            if not value:
+                continue
             try:
                 import uuid
 
-                uuid.UUID(self.task_id)
+                uuid.UUID(value)
             except ValueError as exc:
                 raise ValueError(
-                    "task_id must be a UUID from the project page"
+                    f"{field} must be a UUID from the project page"
                 ) from exc
         if not 60 <= self.capture_interval_seconds <= 86_400:
             raise ValueError("capture_interval_seconds must be between 60 and 86400")
@@ -100,6 +114,39 @@ class AgentConfig:
             raise ValueError("website_bridge_token must contain at least 32 characters")
         if not 1024 <= self.website_bridge_port <= 65_535:
             raise ValueError("website_bridge_port must be between 1024 and 65535")
+        if bool(self.update_manifest_url) != bool(self.update_public_key):
+            raise ValueError(
+                "update_manifest_url and update_public_key must be configured together"
+            )
+        if self.update_mode not in {"off", "notify", "download"}:
+            raise ValueError("update_mode must be off, notify, or download")
+        if self.update_manifest_url:
+            parsed_update = urlparse(self.update_manifest_url)
+            if (
+                parsed_update.scheme not in {"http", "https"}
+                or not parsed_update.hostname
+                or parsed_update.username
+                or parsed_update.password
+                or parsed_update.fragment
+            ):
+                raise ValueError("update_manifest_url must be a safe HTTP(S) URL")
+            if parsed_update.scheme != "https" and not self._is_loopback(
+                parsed_update.hostname
+            ):
+                raise ValueError(
+                    "update_manifest_url requires HTTPS unless hosted on localhost"
+                )
+            try:
+                padding = "=" * (-len(self.update_public_key) % 4)
+                public_key = base64.b64decode(
+                    self.update_public_key + padding,
+                    altchars=b"-_",
+                    validate=True,
+                )
+            except (TypeError, ValueError) as exc:
+                raise ValueError("update_public_key must be valid base64url") from exc
+            if len(public_key) != 32:
+                raise ValueError("update_public_key must decode to 32 bytes")
 
     @staticmethod
     def _is_loopback(hostname: str) -> bool:

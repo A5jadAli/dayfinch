@@ -5,6 +5,7 @@ import json
 import threading
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from typing import Any
 from urllib.parse import urlsplit
 
 
@@ -51,6 +52,10 @@ class WebsiteBridge:
         self._received_at = 0.0
         self._server: ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
+        self._timer_controller: Any | None = None
+
+    def set_timer_controller(self, controller: Any) -> None:
+        self._timer_controller = controller
 
     def start(self) -> bool:
         if not self.token:
@@ -58,6 +63,15 @@ class WebsiteBridge:
         bridge = self
 
         class Handler(BaseHTTPRequestHandler):
+            def do_GET(self) -> None:  # noqa: N802
+                if self.path != "/v1/timer" or not self._extension_origin():
+                    self.send_error(404)
+                    return
+                if not self._authorized_header() or not bridge._timer_controller:
+                    self.send_error(401)
+                    return
+                self._json_response(bridge._timer_controller.browser_timer_snapshot())
+
             def do_OPTIONS(self) -> None:  # noqa: N802
                 if not self._extension_origin():
                     self.send_error(403)
@@ -67,7 +81,7 @@ class WebsiteBridge:
                 self.end_headers()
 
             def do_POST(self) -> None:  # noqa: N802
-                if self.path != "/v1/active-domain" or not self._extension_origin():
+                if not self._extension_origin():
                     self.send_error(404)
                     return
                 try:
@@ -75,14 +89,32 @@ class WebsiteBridge:
                     if length < 1 or length > 4096:
                         raise ValueError
                     body = json.loads(self.rfile.read(length))
+                    if not isinstance(body, dict):
+                        raise ValueError
                     supplied = str(body.get("token", ""))
-                    if not hmac.compare_digest(supplied, bridge.token):
+                    if not (
+                        self._authorized_header()
+                        or hmac.compare_digest(supplied, bridge.token)
+                    ):
                         self.send_error(401)
                         return
-                    domain = normalize_domain(str(body.get("domain", "")))
-                    bridge._update(domain)
+                    if self.path == "/v1/active-domain":
+                        domain = normalize_domain(str(body.get("domain", "")))
+                        bridge._update(domain)
+                    elif self.path == "/v1/timer" and bridge._timer_controller:
+                        result = bridge._timer_controller.browser_timer_action(
+                            str(body.get("action", "")),
+                            str(body.get("project_id", "")),
+                            str(body.get("task_id", "")),
+                            str(body.get("note", "")),
+                        )
+                        self._json_response(result)
+                        return
+                    else:
+                        self.send_error(404)
+                        return
                 except (ValueError, TypeError, json.JSONDecodeError):
-                    self.send_error(400)
+                    self.send_error(422)
                     return
                 self.send_response(204)
                 self._cors_headers()
@@ -92,10 +124,29 @@ class WebsiteBridge:
                 origin = self.headers.get("Origin", "")
                 return origin.startswith(("chrome-extension://", "moz-extension://"))
 
+            def _authorized_header(self) -> bool:
+                prefix = "Bearer "
+                header = self.headers.get("Authorization", "")
+                return header.startswith(prefix) and hmac.compare_digest(
+                    header[len(prefix) :], bridge.token
+                )
+
+            def _json_response(self, payload: dict) -> None:
+                encoded = json.dumps(payload, separators=(",", ":")).encode()
+                self.send_response(200)
+                self._cors_headers()
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(encoded)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(encoded)
+
             def _cors_headers(self) -> None:
                 self.send_header("Access-Control-Allow-Origin", self.headers["Origin"])
-                self.send_header("Access-Control-Allow-Headers", "Content-Type")
-                self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+                self.send_header(
+                    "Access-Control-Allow-Headers", "Authorization, Content-Type"
+                )
+                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
                 self.send_header("Vary", "Origin")
 
             def log_message(self, _format: str, *_args: object) -> None:
@@ -105,6 +156,7 @@ class WebsiteBridge:
             self._server = ThreadingHTTPServer(("127.0.0.1", self.port), Handler)
         except OSError:
             return False
+        self.port = int(self._server.server_address[1])
         self._thread = threading.Thread(
             target=self._server.serve_forever,
             name="website-bridge",

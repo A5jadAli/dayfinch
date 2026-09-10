@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: read
+  id-token: write
+  attestations: write
 
 jobs:
   package:
@@ -16,10 +18,19 @@ jobs:
         include:
           - os: ubuntu-24.04
             artifact: dayfinch-agent-linux-x64
+            executable: dist/Dayfinch-Agent
+            release_file: dist/release/dayfinch-agent-linux-x64
+            installer_file: dist/release/dayfinch-agent-linux-amd64.deb
           - os: windows-2025
             artifact: dayfinch-agent-windows-x64
+            executable: dist/Dayfinch-Agent.exe
+            release_file: dist/release/dayfinch-agent-windows-x64.exe
+            installer_file: dist/release/dayfinch-agent-windows-x64-setup.exe
           - os: macos-15
             artifact: dayfinch-agent-macos-arm64
+            executable: dist/Dayfinch-Agent
+            release_file: dist/release/dayfinch-agent-macos-arm64
+            installer_file: dist/release/dayfinch-agent-macos-arm64.pkg
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
@@ -29,14 +40,255 @@ jobs:
           cache: pip
       - run: python -m pip install --upgrade pip
       - run: pip install ".[agent,package]"
+      - run: python scripts/build_desktop_icons.py
+      - name: Validate tagged release version
+        if: github.ref_type == 'tag'
+        run: python -c "import agent, os; expected = 'v' + agent.__version__; actual = os.environ['GITHUB_REF_NAME']; raise SystemExit(0 if actual == expected else f'tag {actual} does not match {expected}')"
       - run: pyinstaller --noconfirm --clean packaging/dayfinch_agent.spec
       - run: dist/Dayfinch-Agent --help
         if: runner.os != 'Windows'
       - run: .\dist\Dayfinch-Agent.exe --help
         if: runner.os == 'Windows'
+      - name: Sign and verify Windows executable
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PFX: ${{ secrets.WINDOWS_CERTIFICATE_PFX }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+        run: |
+          $values = @(
+            $env:WINDOWS_CERTIFICATE_PFX,
+            $env:WINDOWS_CERTIFICATE_PASSWORD,
+            $env:WINDOWS_TIMESTAMP_URL
+          )
+          $present = @($values | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }).Count
+          $configured = $present -eq $values.Count
+          if ($present -gt 0 -and -not $configured) {
+            throw "Configure all Windows signing values or none of them."
+          }
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and -not $configured) {
+            throw "Tagged releases require Windows Authenticode signing credentials."
+          }
+          if (-not $configured) {
+            "DAYFINCH_WINDOWS_SIGNING_READY=false" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+            exit 0
+          }
+          $certificate = Join-Path $env:RUNNER_TEMP "dayfinch-signing.pfx"
+          [IO.File]::WriteAllBytes(
+            $certificate,
+            [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_PFX)
+          )
+          $signTool = Get-ChildItem `
+            "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" `
+            -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending |
+            Select-Object -First 1
+          if (-not $signTool) { throw "Windows SDK SignTool was not found." }
+          & $signTool.FullName sign /fd SHA256 /td SHA256 `
+            /tr $env:WINDOWS_TIMESTAMP_URL /f $certificate `
+            /p $env:WINDOWS_CERTIFICATE_PASSWORD "${{ matrix.executable }}"
+          if ($LASTEXITCODE -ne 0) { throw "Windows executable signing failed." }
+          & $signTool.FullName verify /pa /all /v "${{ matrix.executable }}"
+          if ($LASTEXITCODE -ne 0) { throw "Windows executable verification failed." }
+          "DAYFINCH_WINDOWS_SIGNING_READY=true" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "DAYFINCH_WINDOWS_SIGNTOOL=$($signTool.FullName)" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "DAYFINCH_WINDOWS_CERTIFICATE=$certificate" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Prepare macOS signing and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_APPLICATION_CERTIFICATE_P12: ${{ secrets.MACOS_APPLICATION_CERTIFICATE_P12 }}
+          MACOS_INSTALLER_CERTIFICATE_P12: ${{ secrets.MACOS_INSTALLER_CERTIFICATE_P12 }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          MACOS_APPLICATION_IDENTITY: ${{ secrets.MACOS_APPLICATION_IDENTITY }}
+          MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+          MACOS_NOTARY_API_KEY_P8: ${{ secrets.MACOS_NOTARY_API_KEY_P8 }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER }}
+        run: |
+          values=(
+            "$MACOS_APPLICATION_CERTIFICATE_P12"
+            "$MACOS_INSTALLER_CERTIFICATE_P12"
+            "$MACOS_CERTIFICATE_PASSWORD"
+            "$MACOS_APPLICATION_IDENTITY"
+            "$MACOS_INSTALLER_IDENTITY"
+            "$MACOS_NOTARY_API_KEY_P8"
+            "$MACOS_NOTARY_KEY_ID"
+            "$MACOS_NOTARY_ISSUER"
+          )
+          present=0
+          for value in "${values[@]}"; do
+            if [[ -n "$value" ]]; then present=$((present + 1)); fi
+          done
+          if [[ "$present" -gt 0 && "$present" -ne "${#values[@]}" ]]; then
+            echo "Configure all macOS signing/notarization values or none of them." >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" == "tag" && "$present" -eq 0 ]]; then
+            echo "Tagged releases require Developer ID and notarization credentials." >&2
+            exit 1
+          fi
+          if [[ "$present" -eq 0 ]]; then
+            echo "DAYFINCH_MACOS_SIGNING_READY=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          app_p12="$RUNNER_TEMP/dayfinch-application.p12"
+          installer_p12="$RUNNER_TEMP/dayfinch-installer.p12"
+          notary_key="$RUNNER_TEMP/AuthKey_${MACOS_NOTARY_KEY_ID}.p8"
+          keychain="$RUNNER_TEMP/dayfinch-signing.keychain-db"
+          export app_p12 installer_p12 notary_key
+          python -c 'import base64, os, pathlib; pathlib.Path(os.environ["app_p12"]).write_bytes(base64.b64decode(os.environ["MACOS_APPLICATION_CERTIFICATE_P12"], validate=True)); pathlib.Path(os.environ["installer_p12"]).write_bytes(base64.b64decode(os.environ["MACOS_INSTALLER_CERTIFICATE_P12"], validate=True)); pathlib.Path(os.environ["notary_key"]).write_bytes(base64.b64decode(os.environ["MACOS_NOTARY_API_KEY_P8"], validate=True))'
+          chmod 600 "$app_p12" "$installer_p12" "$notary_key"
+          security create-keychain -p "$MACOS_CERTIFICATE_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$MACOS_CERTIFICATE_PASSWORD" "$keychain"
+          security import "$app_p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security import "$installer_p12" -k "$keychain" -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/pkgbuild -T /usr/bin/productsign
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$MACOS_CERTIFICATE_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          codesign --force --options runtime --timestamp \
+            --sign "$MACOS_APPLICATION_IDENTITY" "${{ matrix.executable }}"
+          codesign --verify --strict --verbose=2 "${{ matrix.executable }}"
+          echo "DAYFINCH_MACOS_SIGNING_READY=true" >> "$GITHUB_ENV"
+          echo "DAYFINCH_MACOS_KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          echo "DAYFINCH_MACOS_NOTARY_KEY=$notary_key" >> "$GITHUB_ENV"
+      - run: python scripts/package_release.py "${{ matrix.executable }}" "${{ matrix.release_file }}"
+      - name: Build native Linux installer
+        if: runner.os == 'Linux'
+        run: |
+          version="$(python -c 'import agent; print(agent.__version__)')"
+          python scripts/package_linux.py "${{ matrix.executable }}" "${{ matrix.installer_file }}" --version "$version"
+      - name: Build native Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $compiler = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles}\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $compiler) { throw "Inno Setup 6 is unavailable." }
+          $version = python -c "import agent; print(agent.__version__)"
+          python scripts/package_windows.py `
+            "${{ matrix.executable }}" "${{ matrix.installer_file }}" `
+            --version $version --compiler $compiler
+      - name: Sign and verify Windows installer
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+          WINDOWS_TIMESTAMP_URL: ${{ vars.WINDOWS_TIMESTAMP_URL }}
+        run: |
+          if ($env:DAYFINCH_WINDOWS_SIGNING_READY -ne "true") { exit 0 }
+          $installer = "${{ matrix.installer_file }}"
+          & $env:DAYFINCH_WINDOWS_SIGNTOOL sign /fd SHA256 /td SHA256 `
+            /tr $env:WINDOWS_TIMESTAMP_URL /f $env:DAYFINCH_WINDOWS_CERTIFICATE `
+            /p $env:WINDOWS_CERTIFICATE_PASSWORD $installer
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer signing failed." }
+          & $env:DAYFINCH_WINDOWS_SIGNTOOL verify /pa /all /v $installer
+          if ($LASTEXITCODE -ne 0) { throw "Windows installer verification failed." }
+          $hash = (Get-FileHash $installer -Algorithm SHA256).Hash.ToLowerInvariant()
+          $name = [IO.Path]::GetFileName($installer)
+          [IO.File]::WriteAllText("$installer.sha256", "$hash  $name`n", [Text.Encoding]::ASCII)
+      - name: Build native macOS installer
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_APPLICATION_IDENTITY: ${{ secrets.MACOS_APPLICATION_IDENTITY }}
+          MACOS_INSTALLER_IDENTITY: ${{ secrets.MACOS_INSTALLER_IDENTITY }}
+          MACOS_NOTARY_KEY_ID: ${{ secrets.MACOS_NOTARY_KEY_ID }}
+          MACOS_NOTARY_ISSUER: ${{ secrets.MACOS_NOTARY_ISSUER }}
+        run: |
+          version="$(python -c 'import agent; print(agent.__version__)')"
+          arguments=(
+            "${{ matrix.executable }}"
+            "${{ matrix.installer_file }}"
+            --version "$version"
+          )
+          if [[ "$DAYFINCH_MACOS_SIGNING_READY" == "true" ]]; then
+            arguments+=(
+              --application-identity "$MACOS_APPLICATION_IDENTITY"
+              --installer-identity "$MACOS_INSTALLER_IDENTITY"
+              --notary-key "$DAYFINCH_MACOS_NOTARY_KEY"
+              --notary-key-id "$MACOS_NOTARY_KEY_ID"
+              --notary-issuer "$MACOS_NOTARY_ISSUER"
+            )
+          fi
+          python scripts/package_macos.py "${arguments[@]}"
+      - name: Remove temporary Windows signing credentials
+        if: always() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $certificate = Join-Path $env:RUNNER_TEMP "dayfinch-signing.pfx"
+          if (Test-Path $certificate) {
+            Remove-Item -LiteralPath $certificate -Force
+          }
+      - name: Remove temporary macOS signing credentials
+        if: always() && runner.os == 'macOS'
+        shell: bash
+        run: |
+          keychain="$RUNNER_TEMP/dayfinch-signing.keychain-db"
+          if [[ -e "$keychain" ]]; then
+            security delete-keychain "$keychain" || true
+          fi
+          rm -f \
+            "$RUNNER_TEMP/dayfinch-application.p12" \
+            "$RUNNER_TEMP/dayfinch-installer.p12" \
+            "$RUNNER_TEMP"/AuthKey_*.p8
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ matrix.release_file }}
+      - uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: ${{ matrix.installer_file }}
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: dist/Dayfinch-Agent*
+          path: |
+            ${{ matrix.release_file }}
+            ${{ matrix.release_file }}.sha256
+            ${{ matrix.installer_file }}
+            ${{ matrix.installer_file }}.sha256
           if-no-files-found: error
           retention-days: 14
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+      - run: pip install .
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: dayfinch-agent-*
+          path: dist/releases
+          merge-multiple: true
+      - name: Sign authenticated update manifest
+        env:
+          DAYFINCH_UPDATE_SIGNING_KEY: ${{ secrets.DAYFINCH_UPDATE_SIGNING_KEY }}
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          python scripts/sign_update_manifest.py \
+            --version "$version" \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}" \
+            --artifact linux-x86_64=dist/releases/dayfinch-agent-linux-x64 \
+            --artifact windows-x86_64=dist/releases/dayfinch-agent-windows-x64.exe \
+            --artifact macos-arm64=dist/releases/dayfinch-agent-macos-arm64 \
+            --output dist/releases/dayfinch-update.json \
+            --public-key-output dist/releases/dayfinch-update-public-key.txt
+      - name: Publish stable tag release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --verify-tag --generate-notes
+          fi
+          gh release upload "$GITHUB_REF_NAME" dist/releases/* --clobber

@@ -1,13 +1,17 @@
 {
   "manifest_version": 3,
-  "name": "Dayfinch Active Website",
-  "version": "0.1.0",
-  "description": "Reports only the active tab domain to the local Dayfinch agent.",
+  "name": "Dayfinch Timer",
+  "version": "0.2.0",
+  "description": "Controls the visible local Dayfinch timer and reports only the active tab domain.",
   "permissions": ["alarms", "storage", "tabs"],
   "host_permissions": ["http://127.0.0.1/*"],
   "background": {
     "scripts": ["service-worker.js"],
     "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "Dayfinch Timer",
+    "default_popup": "popup.html"
   },
   "options_page": "options.html"
 }

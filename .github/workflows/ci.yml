@@ -38,6 +38,8 @@ jobs:
       - run: node --check ui/static/field.js
       - run: node --check ui/static/service-worker.js
       - run: node --check extensions/chromium/service-worker.js
+      - run: node --check extensions/chromium/options.js
+      - run: node --check extensions/chromium/popup.js
       - run: python -m pytest
 
   agent-tests:
@@ -59,11 +61,42 @@ jobs:
           python -m pytest
           tests/test_active_app.py
           tests/test_activity.py
+          tests/test_automatic_policy.py
           tests/test_capture.py
           tests/test_config.py
           tests/test_diagnostics.py
           tests/test_idle.py
+          tests/test_agent_installer.py
+          tests/test_agent_update.py
+          tests/test_agent_lifecycle.py
           tests/test_queue.py
+          tests/test_tracking_reminders.py
           tests/test_offline_resilience.py
           tests/test_policy_variants.py
           tests/test_website_bridge.py
+
+  mobile-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: npm ci
+      - run: npm audit --audit-level=high
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run doctor -- --verbose
+      - run: npx expo export --platform all --output-dir /tmp/dayfinch-mobile-export
+      - run: npx expo prebuild --no-install --platform android
+      - run: ./gradlew :app:assembleDebug
+        working-directory: mobile/android

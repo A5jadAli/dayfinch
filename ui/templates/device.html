@@ -10,23 +10,25 @@
       <span class="text-faint">/</span>
       <span>{{ device.project_name or 'No project' }}</span>
       <span class="text-faint">/</span>
+      <span>{{ device.tracker_kind|title }} tracker</span>
+      <span class="text-faint">/</span>
       <span class="max-w-[22rem] truncate">{{ device.platform or 'Platform not reported' }}</span>
     </div>
     <p class="mt-1 text-sm text-muted">Last seen {{ (device.last_seen_at[:19] | replace('T', ' ')) if device.last_seen_at else 'never' }}</p>
   </div>
-  <form method="post" action="/devices/{{ device.id }}/enabled">
+  {% if can_manage_device %}<form method="post" action="/devices/{{ device.id }}/enabled">
     <input type="hidden" name="csrf" value="{{ csrf_token }}">
     <input type="hidden" name="enabled" value="{{ 0 if device.enabled else 1 }}">
     <button class="btn {{ 'btn-danger' if device.enabled else 'btn-secondary' }}" type="submit">{{ 'Revoke token' if device.enabled else 'Enable device' }}</button>
-  </form>
+  </form>{% endif %}
 </div>
 
-<div class="notice mt-6"><svg class="icon icon-sm mt-px"><use href="#i-alert"></use></svg><span>
+{% if device.tracker_kind == 'desktop' %}<div class="notice mt-6"><svg class="icon icon-sm mt-px"><use href="#i-alert"></use></svg><span>
   Deleting a capture permanently removes its screenshot and the keyboard and mouse activity recorded for that
   interval.</span>
-</div>
+</div>{% endif %}
 
-{% if records %}
+  {% if not can_view_activity %}<div class="notice mt-5">Manage IT access permits device health and revocation only. Screenshot and activity contents remain private.</div>{% elif records %}
 <div data-stagger-items class="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
   {% for record in records %}
   <article class="capture-card">
@@ -49,10 +51,10 @@
         <span class="rounded bg-sunken px-1.5 py-0.5 tabular-nums">{{ record.mouse_clicks }} clicks</span>
         <span class="rounded bg-sunken px-1.5 py-0.5 tabular-nums">{{ record.mouse_distance }} px</span>
       </div>
-      <form method="post" action="/screenshots/{{ record.id }}/delete" onsubmit="return confirm('Permanently delete this screenshot and its complete activity interval?');">
+      {% if can_delete_activity %}<form method="post" action="/screenshots/{{ record.id }}/delete" onsubmit="return confirm('Permanently delete this screenshot and its complete activity interval?');">
         <input type="hidden" name="csrf" value="{{ csrf_token }}">
         <button class="btn btn-danger btn-sm" type="submit">Delete this interval</button>
-      </form>
+      </form>{% endif %}
     </div>
   </article>
   {% endfor %}
@@ -62,7 +64,7 @@
   <div class="empty">
     <svg viewBox="0 0 100 100" class="empty-art h-10 w-10"><use href="#i-shape-star"></use></svg>
     <h2 class="section-title">No captures received</h2>
-    <p class="muted mt-1">Start the enrolled agent and keep this page private.</p>
+    <p class="muted mt-1">{% if device.tracker_kind == 'mobile' %}Native mobile records time and consented GPS, but mobile operating systems do not permit cross-app screenshots or keyboard/mouse activity.{% else %}Start the enrolled agent and keep this page private.{% endif %}</p>
   </div>
 </section>
 {% endif %}

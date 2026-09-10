@@ -16,6 +16,41 @@ def test_device_tokens_are_hashed_and_revocable(database: Database):
     assert database.authenticate_device(token) is None
 
 
+def test_device_revocation_atomically_stops_its_open_session(database: Database):
+    owner = database.bootstrap_admin("revoke@example.test", "hash")
+    project = database.create_project("Revocation", "", owner["id"])
+    database.add_project_member(project["id"], owner["id"])
+    device, token = database.create_device(
+        "Work phone", owner["id"], project["id"], tracker_kind="mobile"
+    )
+    session = database.sync_work_session(
+        device, "active", None, project["id"], transition=True
+    )
+    database.start_break(owner["id"], session["id"])
+
+    database.set_device_enabled(device["id"], False)
+
+    assert database.authenticate_device(token) is None
+    assert database.get_work_session(session["id"])["status"] == "stopped"
+    with database.connect() as connection:
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) count FROM work_session_segments "
+                "WHERE session_id=%s AND ended_at IS NULL",
+                (session["id"],),
+            ).fetchone()["count"]
+            == 0
+        )
+        assert (
+            connection.execute(
+                "SELECT COUNT(*) count FROM work_breaks "
+                "WHERE session_id=%s AND ended_at IS NULL",
+                (session["id"],),
+            ).fetchone()["count"]
+            == 0
+        )
+
+
 def test_activity_records_are_idempotent(database: Database):
     device, _ = database.create_device("Pilot laptop")
     record = {

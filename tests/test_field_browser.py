@@ -119,8 +119,80 @@ HARNESS = b"""<!doctype html>
 <script src="/hold"></script>
 </body></html>"""
 
+POLICY_HARNESS = b"""<!doctype html>
+<html><body>
+<main data-field-tracker data-csrf="test-csrf">
+  <p data-location-state></p><p data-sync-state></p><p data-accuracy></p>
+  <button data-location-toggle>Location</button>
+  <form data-field-timer action="/timer/start">
+    <input name="project_id" value="project-42">
+  </form>
+</main>
+<output id="result" data-result="RUNNING">RUNNING</output>
+<script>
+  window.fetch = async () => new Response(
+    JSON.stringify({detail: 'Desktop tracking is required by policy'}),
+    {status: 403, headers: {'Content-Type': 'application/json'}}
+  );
+</script>
+<script src="/ui/static/field.js"></script>
+<script>
+  const result = document.querySelector('#result');
+  const finish = (status, message) => {
+    result.dataset.result = status;
+    result.textContent = `${status}: ${message}`;
+    new Image().src = '/done';
+  };
+  const rows = storeName => new Promise((resolve, reject) => {
+    const request = indexedDB.open('dayfinch-field-v1', 2);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains('events')) request.result.createObjectStore('events', {keyPath: 'id'});
+      if (!request.result.objectStoreNames.contains('rejected')) request.result.createObjectStore('rejected', {keyPath: 'id'});
+      if (!request.result.objectStoreNames.contains('meta')) request.result.createObjectStore('meta');
+    };
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const db = request.result;
+      const read = db.transaction(storeName).objectStore(storeName).getAll();
+      read.onerror = () => reject(read.error);
+      read.onsuccess = () => { db.close(); resolve(read.result); };
+    };
+  });
+  (async () => {
+    await new Promise(resolve => setTimeout(resolve, 250));
+    if (!sessionStorage.getItem('policy-submitted')) {
+      sessionStorage.setItem('policy-submitted', 'true');
+      document.querySelector('form').dispatchEvent(
+        new Event('submit', {bubbles: true, cancelable: true})
+      );
+      return;
+    }
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const pending = await rows('events');
+      const rejected = await rows('rejected');
+      if (!pending.length && rejected.length === 1) {
+        if (rejected[0].rejection_reason !== 'tracking-app-disabled') {
+          throw new Error('policy rejection reason was not retained');
+        }
+        if (rejected[0].response_status !== 403) {
+          throw new Error('policy rejection status was not retained');
+        }
+        if (!document.querySelector('[data-sync-state]').textContent.includes('Needs attention')) {
+          throw new Error('rejected policy event was not surfaced');
+        }
+        finish('PASS', 'policy event quarantined');
+        return;
+      }
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+    throw new Error('policy event remained in retry queue');
+  })().catch(error => finish('FAIL', error.message));
+</script>
+<script src="/hold"></script>
+</body></html>"""
 
-def test_field_browser_encrypts_offline_then_replays_on_reconnect(tmp_path: Path):
+
+def _run_browser_harness(tmp_path: Path, harness: bytes):
     chrome = next(
         (
             executable
@@ -140,7 +212,7 @@ def test_field_browser_encrypts_offline_then_replays_on_reconnect(tmp_path: Path
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):  # noqa: N802
             if self.path == "/":
-                body, content_type = HARNESS, "text/html; charset=utf-8"
+                body, content_type = harness, "text/html; charset=utf-8"
                 status = 200
             elif self.path == "/ui/static/field.js":
                 body, content_type = field_script, "text/javascript; charset=utf-8"
@@ -158,7 +230,10 @@ def test_field_browser_encrypts_offline_then_replays_on_reconnect(tmp_path: Path
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(body)
+            try:
+                self.wfile.write(body)
+            except BrokenPipeError:
+                pass
 
         def log_message(self, _format, *_args):
             return
@@ -192,6 +267,18 @@ def test_field_browser_encrypts_offline_then_replays_on_reconnect(tmp_path: Path
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+    return result
+
+
+def test_field_browser_encrypts_offline_then_replays_on_reconnect(tmp_path: Path):
+    result = _run_browser_harness(tmp_path, HARNESS)
+
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert 'data-result="PASS"' in result.stdout, result.stdout[-3000:]
+
+
+def test_field_browser_quarantines_desktop_only_policy_rejection(tmp_path: Path):
+    result = _run_browser_harness(tmp_path, POLICY_HARNESS)
 
     assert result.returncode == 0, result.stderr[-2000:]
     assert 'data-result="PASS"' in result.stdout, result.stdout[-3000:]

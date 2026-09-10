@@ -26,8 +26,11 @@ async function reportActiveDomain() {
   try {
     await fetch(`http://127.0.0.1:${bridgePort}/v1/active-domain`, {
       method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({token: bridgeToken, domain})
+      headers: {
+        "Authorization": `Bearer ${bridgeToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({domain})
     });
   } catch (_error) {
     // The agent may be paused or stopped. The agent encrypts accepted samples in

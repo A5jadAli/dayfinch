@@ -162,8 +162,10 @@ def _linux_checks() -> list[DiagnosticCheck]:
             ),
             DiagnosticCheck(
                 "capture-consent-persistence",
-                "warn",
-                "Screenshot portal may prompt per capture; persistent ScreenCast is not implemented",
+                "pass" if shutil.which("gst-launch-1.0") else "warn",
+                "persistent ScreenCast capture and rotating restore tokens are available"
+                if shutil.which("gst-launch-1.0")
+                else "install GStreamer PipeWire plugins to avoid per-capture prompts",
             ),
             DiagnosticCheck(
                 "foreground-application",

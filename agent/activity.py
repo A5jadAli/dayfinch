@@ -201,6 +201,10 @@ class ActivityMonitor:
             if self._enabled:
                 self._keyboard_events += 1
                 self._mark_input_unlocked()
+            else:
+                # A timestamp is enough to satisfy a consented "start on first
+                # activity" policy; no key value or stopped-time count is kept.
+                self._mark_input_unlocked(track_cadence=False)
 
     def _on_click(self, _x: int, _y: int, _button: object, pressed: bool) -> None:
         if not pressed:
@@ -209,10 +213,13 @@ class ActivityMonitor:
             if self._enabled:
                 self._mouse_clicks += 1
                 self._mark_input_unlocked()
+            else:
+                self._mark_input_unlocked(track_cadence=False)
 
     def _on_move(self, x: int, y: int) -> None:
         with self._lock:
             if not self._enabled:
+                self._mark_input_unlocked(track_cadence=False)
                 return
             # Pointer drivers emit naturally regular samples while a person moves
             # the mouse, so movement cadence alone is not evidence of automation.

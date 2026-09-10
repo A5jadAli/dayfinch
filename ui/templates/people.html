@@ -1,5 +1,154 @@
-{% extends "base.html" %}{% block title %}People · Dayfinch{% endblock %}{% block content %}
-<div><p class="eyebrow">Team administration</p><h1 class="page-title mt-1">People</h1><p class="muted mt-1">Roles, rates, limits, projects, and enrolled devices.</p></div>
-<section class="card card-body mt-6"><div class="flex flex-wrap items-end justify-between gap-4"><div><p class="eyebrow">Reporting lines</p><h2 class="section-title mt-1">Teams</h2></div><form method="post" action="/teams" class="flex flex-wrap gap-2"><input type="hidden" name="csrf" value="{{ csrf_token }}"><input class="input w-48" name="name" aria-label="Team name" placeholder="Team name" required><select class="input w-52" name="lead_user_id" aria-label="Team lead"><option value="">No team lead</option>{% for u in users %}<option value="{{ u.id }}">{{ u.full_name or u.email }}</option>{% endfor %}</select><button class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-users"></use></svg> Create team</button></form></div>{% if teams %}<div class="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">{% for team in teams %}<article class="rounded-xl border border-line p-4"><div class="flex items-center justify-between"><strong class="text-ink">{{ team.name }}</strong><span class="badge badge-neutral">{{ team.member_count }} members</span></div><p class="mt-1 text-xs text-muted">Lead: {{ team.lead_name or team.lead_email or 'Not assigned' }}</p>{% if team.members %}<div class="mt-3 flex flex-wrap gap-1">{% for member in team.members %}<form method="post" action="/teams/{{ team.id }}/members/{{ member.id }}/remove"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="badge badge-neutral" title="Remove from team">{{ member.full_name or member.email }} <svg class="icon icon-sm h-3 w-3"><use href="#i-close"></use></svg></button></form>{% endfor %}</div>{% endif %}<form method="post" action="/teams/{{ team.id }}/members" class="mt-3 flex gap-2"><input type="hidden" name="csrf" value="{{ csrf_token }}"><select class="input" name="user_id" aria-label="Member to add" required><option value="">Add member</option>{% for u in users %}<option value="{{ u.id }}">{{ u.full_name or u.email }}</option>{% endfor %}</select><button class="btn btn-secondary btn-sm">Add</button></form></article>{% endfor %}</div>{% endif %}</section>
-<section class="card mt-6"><div class="table-wrap"><table class="table"><thead><tr><th>Person</th><th>Access</th><th>Pay / bill rate</th><th>Daily / weekly limits</th><th>Projects</th><th>Devices</th><th></th></tr></thead><tbody>{% for u in users %}{% set form_id='person-' ~ u.id %}<tr><td><form id="{{ form_id }}" method="post" action="/people/{{ u.id }}"><input type="hidden" name="csrf" value="{{ csrf_token }}"></form><input form="{{ form_id }}" class="input min-w-40" name="full_name" aria-label="Full name for {{ u.email }}" value="{{ u.full_name }}" placeholder="Full name"><p class="mt-1 text-xs text-muted">{{ u.email }} · <span class="{{ 'text-ok' if u.enabled else 'text-danger' }}">{{ 'Active' if u.enabled else 'Disabled' }}</span></p></td><td><select form="{{ form_id }}" class="input" name="role" aria-label="Access role for {{ u.email }}">{% for role in ['admin','manager','member','viewer'] %}<option value="{{ role }}" {{ 'selected' if u.role == role }}>{{ 'Owner' if role == 'admin' else role|title }}</option>{% endfor %}</select></td><td><div class="flex gap-2"><input form="{{ form_id }}" class="input w-24" name="pay_rate" type="number" step="0.01" value="{{ u.pay_rate }}" title="Pay rate" aria-label="Pay rate for {{ u.email }}"><input form="{{ form_id }}" class="input w-24" name="bill_rate" type="number" step="0.01" value="{{ u.bill_rate }}" title="Bill rate" aria-label="Bill rate for {{ u.email }}"></div></td><td><div class="flex gap-2"><input form="{{ form_id }}" class="input w-24" name="daily_limit_minutes" type="number" value="{{ u.daily_limit_minutes }}" title="Daily minutes" aria-label="Daily minute limit for {{ u.email }}"><input form="{{ form_id }}" class="input w-24" name="weekly_limit_minutes" type="number" value="{{ u.weekly_limit_minutes }}" title="Weekly minutes" aria-label="Weekly minute limit for {{ u.email }}"></div></td><td>{{ u.project_count }}</td><td>{{ u.device_count }}</td><td><div class="flex gap-1"><button form="{{ form_id }}" class="btn btn-secondary btn-sm">Save</button>{% if u.id != current_user.id %}<form method="post" action="/people/{{ u.id }}/status"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="btn {{ 'btn-danger' if u.enabled else 'btn-primary' }} btn-sm" name="enabled" value="{{ 'false' if u.enabled else 'true' }}">{{ 'Disable' if u.enabled else 'Enable' }}</button></form>{% endif %}</div></td></tr>{% endfor %}</tbody></table></div></section>
+{% extends "base.html" %}
+{% block title %}People · Dayfinch{% endblock %}
+{% block content %}
+<div>
+  <p class="eyebrow">Team administration</p>
+  <h1 class="page-title mt-1">People</h1>
+  <p class="muted mt-1">Roles, rates, limits, projects, and enrolled devices.</p>
+</div>
+
+<section class="card card-body mt-6">
+  <div class="flex flex-wrap items-end justify-between gap-4">
+    <div><p class="eyebrow">Reporting lines</p><h2 class="section-title mt-1">Teams</h2></div>
+    <form method="post" action="/teams" class="flex flex-wrap gap-2">
+      <input type="hidden" name="csrf" value="{{ csrf_token }}">
+      <input class="input w-48" name="name" aria-label="Team name" placeholder="Team name" required>
+      <select class="input w-52" name="lead_user_id" aria-label="Initial team lead">
+        <option value="">No team lead</option>
+        {% for u in users if u.role == 'member' and u.enabled %}<option value="{{ u.id }}">{{ u.full_name or u.email }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-primary"><svg class="icon icon-sm"><use href="#i-users"></use></svg> Create team</button>
+    </form>
+  </div>
+  {% if teams %}
+  <div class="mt-4 grid gap-3 xl:grid-cols-2">
+    {% for team in teams %}
+    <article class="rounded-xl border border-line p-4">
+      <div class="flex items-center justify-between">
+        <strong class="text-ink">{{ team.name }}</strong>
+        <div class="flex gap-1"><span class="badge badge-neutral">{{ team.member_count }} members</span>{% if team.scim_managed %}<span class="badge badge-ok">SCIM managed</span>{% endif %}</div>
+      </div>
+      {% if team.leads %}
+      <div class="mt-3 grid gap-2">
+        {% for lead in team.leads %}
+        <div class="rounded-lg bg-surface-2 p-3 text-xs">
+          <p class="font-medium text-ink">{{ lead.full_name or lead.email }} · Team lead</p>
+          <p class="mt-1 text-muted">
+            {% set enabled=[] %}
+            {% for key,label in [('approve_timesheets','timesheets'),('approve_manual_time','manual time'),('approve_time_off','time off'),('manage_schedules','schedules'),('manage_projects','projects'),('manage_members','members'),('manage_financials','financials')] %}
+              {% if lead[key] %}{% set _ = enabled.append(label) %}{% endif %}
+            {% endfor %}
+            {{ enabled|join(', ') or 'No delegated permissions' }}
+          </p>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if team.members %}
+      <div class="mt-3 flex flex-wrap gap-1">
+        {% for member in team.members %}
+        {% if team.scim_managed %}<span class="badge badge-neutral">{{ member.full_name or member.email }}</span>{% else %}
+        <form method="post" action="/teams/{{ team.id }}/members/{{ member.id }}/remove">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <button class="badge badge-neutral" title="Remove from team">{{ member.full_name or member.email }} <svg class="icon icon-sm h-3 w-3"><use href="#i-close"></use></svg></button>
+        </form>
+        {% endif %}
+        {% endfor %}
+      </div>
+      {% endif %}
+      {% if not team.scim_managed %}
+      <form method="post" action="/teams/{{ team.id }}/members" class="mt-3 flex gap-2">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <select class="input" name="user_id" aria-label="Member to add" required>
+          <option value="">Add member</option>
+          {% for u in users if u.role == 'member' and u.enabled %}<option value="{{ u.id }}">{{ u.full_name or u.email }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-secondary btn-sm">Add</button>
+      </form>
+      {% else %}<p class="mt-3 text-xs text-muted">Membership is synchronized by the identity provider.</p>{% endif %}
+      {% if team.projects %}
+      <div class="mt-3 flex flex-wrap gap-1">
+        {% for project in team.projects %}
+        <form method="post" action="/teams/{{ team.id }}/projects/{{ project.id }}/remove">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <button class="badge badge-neutral" title="Remove project from team">{{ project.name }} <svg class="icon icon-sm h-3 w-3"><use href="#i-close"></use></svg></button>
+        </form>
+        {% endfor %}
+      </div>
+      {% endif %}
+      <form method="post" action="/teams/{{ team.id }}/projects" class="mt-3 flex gap-2">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <select class="input" name="project_id" aria-label="Project to assign" required>
+          <option value="">Assign project</option>
+          {% for project in projects %}<option value="{{ project.id }}">{{ project.name }}</option>{% endfor %}
+        </select>
+        <button class="btn btn-secondary btn-sm">Assign</button>
+      </form>
+      {% if not team.scim_managed %}<form method="post" action="/teams/{{ team.id }}/leads" class="mt-3 grid gap-2 rounded-lg border border-line p-3">
+        <input type="hidden" name="csrf" value="{{ csrf_token }}">
+        <select class="input" name="user_id" aria-label="Team lead" required>
+          <option value="">Choose team lead</option>
+          {% for u in users if u.role == 'member' and u.enabled %}<option value="{{ u.id }}">{{ u.full_name or u.email }}</option>{% endfor %}
+        </select>
+        <div class="flex flex-wrap gap-x-3 gap-y-2 text-xs text-muted">
+          {% for key,label in [('approve_timesheets','Timesheets'),('approve_manual_time','Manual time'),('approve_time_off','Time off'),('manage_schedules','Schedules'),('manage_projects','Projects'),('manage_members','Members'),('manage_financials','Financials')] %}
+          <label class="flex items-center gap-1"><input type="checkbox" name="{{ key }}" {{ 'checked' if key in ['approve_timesheets','approve_manual_time','approve_time_off','manage_schedules'] }}> {{ label }}</label>
+          {% endfor %}
+        </div>
+        <button class="btn btn-secondary btn-sm w-fit">Assign or update lead</button>
+      </form>
+      {% endif %}
+    </article>
+    {% endfor %}
+  </div>
+  {% endif %}
+</section>
+
+<section class="card mt-6">
+  <div class="table-wrap"><table class="table">
+    <thead><tr><th>Person</th><th>Organization access</th><th>Pay / bill rate</th><th>Payout destination</th><th>Daily / weekly limits</th><th>Projects</th><th>Devices</th><th></th></tr></thead>
+    <tbody>{% for u in users %}{% set form_id='person-' ~ u.id %}<tr>
+      <td>
+        <form id="{{ form_id }}" method="post" action="/people/{{ u.id }}"><input type="hidden" name="csrf" value="{{ csrf_token }}"></form>
+        <input form="{{ form_id }}" class="input min-w-40" name="full_name" aria-label="Full name for {{ u.email }}" value="{{ u.full_name }}" placeholder="Full name">
+        <p class="mt-1 text-xs text-muted">{{ u.email }} · <span class="{{ 'text-ok' if u.enabled else 'text-danger' }}">{{ 'Active' if u.enabled else 'Disabled' }}</span></p>
+      </td>
+      <td>
+        <select form="{{ form_id }}" class="input" name="role" aria-label="Access role for {{ u.email }}">
+          {% set available_roles = ['admin'] if u.role == 'admin' else ['manager','member'] %}
+          {% for role in available_roles %}<option value="{{ role }}" {{ 'selected' if u.role == role }}>{{ 'Owner' if role == 'admin' else 'Organization manager' if role == 'manager' else 'Member' }}</option>{% endfor %}
+          {% if u.role == 'admin' and current_user.role != 'admin' %}<option value="admin" selected>Owner</option>{% endif %}
+        </select>
+        {% if current_user.role == 'admin' %}<label class="mt-2 flex items-center gap-2 text-xs text-muted"><input form="{{ form_id }}" type="checkbox" name="manage_it" {{ 'checked' if u.manage_it }}> Manage IT</label>{% else %}<p class="mt-2 text-xs text-muted">Manage IT: {{ 'Yes' if u.manage_it else 'No' }}</p>{% endif %}
+      </td>
+      <td><div class="flex gap-2"><input form="{{ form_id }}" class="input w-24" name="pay_rate" type="number" step="0.01" value="{{ u.pay_rate }}" aria-label="Pay rate for {{ u.email }}"><input form="{{ form_id }}" class="input w-24" name="bill_rate" type="number" step="0.01" value="{{ u.bill_rate }}" aria-label="Bill rate for {{ u.email }}"></div></td>
+      <td>
+        {% if payment_provider == 'paypal' and current_user.role == 'admin' %}
+        {% set destination = payroll_destinations.get(u.id) %}
+        <form method="post" action="/people/{{ u.id }}/payroll-destination" class="grid min-w-56 gap-1">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="provider" value="paypal">
+          <input class="input py-1" type="email" name="recipient" maxlength="127" value="{{ destination.recipient if destination else '' }}" placeholder="PayPal payout email" aria-label="PayPal payout email for {{ u.email }}" required>
+          <label class="flex items-center gap-1 text-xs text-muted"><input type="checkbox" name="confirmed" required> Ownership confirmed</label>
+          <button class="btn btn-secondary btn-sm w-fit">{{ 'Change' if destination else 'Confirm' }}</button>
+        </form>
+        {% elif payment_provider == 'wise' and current_user.role == 'admin' %}
+        {% set destination = payroll_destinations.get(u.id) %}
+        <form method="post" action="/people/{{ u.id }}/payroll-destination" class="grid min-w-56 gap-1">
+          <input type="hidden" name="csrf" value="{{ csrf_token }}">
+          <input type="hidden" name="provider" value="wise">
+          <input class="input py-1" inputmode="numeric" pattern="[0-9]+" name="recipient" maxlength="127" value="{{ destination.recipient if destination else '' }}" placeholder="Wise recipient account ID" aria-label="Wise recipient account ID for {{ u.email }}" required>
+          <input class="input py-1" name="currency" maxlength="3" value="{{ destination.currency if destination else settings.currency if settings is defined else 'USD' }}" placeholder="Currency" aria-label="Wise destination currency for {{ u.email }}" required>
+          <label class="flex items-center gap-1 text-xs text-muted"><input type="checkbox" name="confirmed" required> Recipient and currency confirmed in Wise</label>
+          <button class="btn btn-secondary btn-sm w-fit">{{ 'Change' if destination else 'Confirm' }}</button>
+        </form>
+        {% elif payment_provider in ['paypal','wise'] %}<span class="text-xs text-muted">Managed by owner</span>
+        {% else %}<span class="text-xs text-muted">{{ payment_provider | title }}</span>{% endif %}
+      </td>
+      <td><div class="flex gap-2"><input form="{{ form_id }}" class="input w-24" name="daily_limit_minutes" type="number" value="{{ u.daily_limit_minutes }}" aria-label="Daily minute limit for {{ u.email }}"><input form="{{ form_id }}" class="input w-24" name="weekly_limit_minutes" type="number" value="{{ u.weekly_limit_minutes }}" aria-label="Weekly minute limit for {{ u.email }}"></div></td>
+      <td>{{ u.project_count }}</td><td>{{ u.device_count }}</td>
+      <td><div class="flex gap-1"><button form="{{ form_id }}" class="btn btn-secondary btn-sm">Save</button>{% if u.id != current_user.id %}<form method="post" action="/people/{{ u.id }}/status"><input type="hidden" name="csrf" value="{{ csrf_token }}"><button class="btn {{ 'btn-danger' if u.enabled else 'btn-primary' }} btn-sm" name="enabled" value="{{ 'false' if u.enabled else 'true' }}">{{ 'Disable' if u.enabled else 'Enable' }}</button></form>{% endif %}</div></td>
+    </tr>{% endfor %}</tbody>
+  </table></div>
+</section>
 {% endblock %}

@@ -154,7 +154,9 @@ const pages = [
   ["people", "/people"],
   ["financials", "/financials"],
   ["reports", "/reports"],
+  ["audit-log", "/reports/audit"],
   ["settings", "/settings"],
+  ["member-tracking", "/settings/member-tracking"],
 ];
 const viewports = [
   ["desktop", 1440, 1000, false],

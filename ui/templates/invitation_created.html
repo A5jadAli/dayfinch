@@ -8,13 +8,15 @@
     <h1 class="page-title mt-2">Invitation not created</h1>
     <p class="notice-error mt-4">{{ error }}</p>
     {% else %}
-    <h1 class="page-title mt-2">Share this link</h1>
+    <h1 class="page-title mt-2">{{ 'Invitation sent' if email_sent else 'Share this link' }}</h1>
     <p class="muted mt-1">
       The one-time invitation for <strong class="font-medium text-ink">{{ invitation.email }}</strong>
       expires at {{ invitation.expires_at }}. The raw token is not stored and this URL cannot be recovered later.
     </p>
     <input class="input mt-5 font-mono text-xs" value="{{ invitation.url }}" readonly aria-label="Invitation URL" onclick="this.select()">
-    <p class="notice mt-4">Share it only with the intended person through an approved private channel.</p>
+    {% if email_sent %}<p class="notice mt-4">Dayfinch delivered the private link to the invited address through the configured SMTP server.</p>
+    {% elif delivery_error %}<p class="notice-error mt-4">{{ delivery_error }}</p>
+    {% else %}<p class="notice mt-4">SMTP is not configured. Share this link only with the intended person through an approved private channel.</p>{% endif %}
     {% endif %}
     <div class="mt-6">
       <a class="btn btn-secondary" href="/">Back to dashboard</a>

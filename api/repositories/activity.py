@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from psycopg.errors import UniqueViolation
@@ -114,9 +115,32 @@ class ActivityRepository(RepositoryMixin):
                 "DELETE FROM activity_records WHERE id = %s", (record_id,)
             )
 
-    def activity_report(self, project_id: str | None = None) -> list[dict[str, Any]]:
-        where = "WHERE a.project_id = %s" if project_id else ""
-        parameters: tuple[Any, ...] = (project_id,) if project_id else ()
+    def activity_report(
+        self,
+        project_id: str | None = None,
+        *,
+        started_at: datetime | None = None,
+        ended_at: datetime | None = None,
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        if (started_at is None) != (ended_at is None):
+            raise ValueError("Both activity report bounds are required")
+        if started_at is not None and ended_at is not None and started_at >= ended_at:
+            raise ValueError("Activity report bounds are invalid")
+        if limit is not None and not 1 <= limit <= 100_001:
+            raise ValueError("Activity report limit is invalid")
+        conditions: list[str] = []
+        parameters: list[Any] = []
+        if project_id:
+            conditions.append("a.project_id = %s")
+            parameters.append(project_id)
+        if started_at is not None:
+            conditions.extend(["a.captured_at >= %s", "a.captured_at < %s"])
+            parameters.extend([started_at, ended_at])
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        limit_sql = "LIMIT %s" if limit is not None else ""
+        if limit is not None:
+            parameters.append(limit)
         with self.connect() as connection:
             rows = connection.execute(
                 f"""SELECT p.name AS project, u.email AS member,
@@ -132,7 +156,8 @@ class ActivityRepository(RepositoryMixin):
                     LEFT JOIN users u ON u.id = a.user_id
                     {where}
                     GROUP BY p.id, u.id, work_date
-                    ORDER BY work_date DESC, p.name, u.email""",
-                parameters,
+                    ORDER BY work_date DESC, p.name, u.email
+                    {limit_sql}""",
+                tuple(parameters),
             ).fetchall()
         return [dict(row) for row in rows]

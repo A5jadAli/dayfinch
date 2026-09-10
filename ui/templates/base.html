@@ -58,8 +58,10 @@ document.getElementById('themeColor').content=t==='dark'?'#0a0a0d':'#f6f6f9';})(
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3.5v11.5"/><path d="m7.5 10.5 4.5 4.5 4.5-4.5"/><path d="M4 20.5h16"/></symbol>
     <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 21.5s8-3.8 8-9.6V5.6L12 2.5 4 5.6v6.3c0 5.8 8 9.6 8 9.6z"/><path d="m9 12 2.2 2.2L15.2 10"/></symbol>
     <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M4 12h15"/><path d="m13.5 6.5 6 5.5-6 5.5"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M20 12H5"/><path d="m10.5 17.5-6-5.5 6-5.5"/></symbol>
     <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9.5 5.5 6.5 6.5-6.5 6.5"/></symbol>
     <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3.5 5.5h17l-6.6 7.6v6l-3.8 2v-8z"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></symbol>
     <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2.5" y="7" width="19" height="13.5" rx="2.5"/><path d="M8.5 7V5.2a2 2 0 0 1 2-2h3a2 2 0 0 1 2 2V7M2.5 12.5h19"/></symbol>
     <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M3 13.5h4.5l1.5 3h6l1.5-3H21"/><path d="M5.2 4.5h13.6l2.2 9v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-5z"/></symbol>
     <symbol id="i-receipt" viewBox="0 0 24 24"><path d="M5 2.5h14v19l-2.3-1.6-2.4 1.6-2.3-1.6-2.4 1.6L7.3 20 5 21.5z"/><path d="M9 8h6M9 12h6"/></symbol>
@@ -97,22 +99,22 @@ document.getElementById('themeColor').content=t==='dark'?'#0a0a0d':'#f6f6f9';})(
     <p class="nav-label">Workspace</p>
     <a class="nav-item {{ 'active' if path == '/' else '' }}" href="/"{{ ' aria-current=page'|safe if path == '/' }}><svg class="icon"><use href="#i-home"></use></svg> Dashboard</a>
     <a class="nav-item {{ 'active' if path.startswith('/activity') else '' }}" href="/activity"><svg class="icon"><use href="#i-activity"></use></svg> Activity</a>
-    <a class="nav-item {{ 'active' if path.startswith('/time-entries') else '' }}" href="/time-entries"><svg class="icon"><use href="#i-clock"></use></svg> Time entries</a>
-    <a class="nav-item {{ 'active' if path.startswith('/timesheets') else '' }}" href="/timesheets"><svg class="icon"><use href="#i-sheet"></use></svg> Timesheets</a>
+    {% if current_user.role != 'viewer' %}<a class="nav-item {{ 'active' if path.startswith('/time-entries') else '' }}" href="/time-entries"><svg class="icon"><use href="#i-clock"></use></svg> Time entries</a>
+    <a class="nav-item {{ 'active' if path.startswith('/timesheets') else '' }}" href="/timesheets"><svg class="icon"><use href="#i-sheet"></use></svg> Timesheets</a>{% endif %}
 
     <p class="nav-label mt-5">Manage</p>
     <a class="nav-item {{ 'active' if path.startswith('/projects') else '' }}" href="/#projects"><svg class="icon"><use href="#i-layers"></use></svg> Projects &amp; tasks</a>
-    <a class="nav-item {{ 'active' if path.startswith('/schedules') else '' }}" href="/schedules"><svg class="icon"><use href="#i-calendar"></use></svg> Schedules &amp; time off</a>
+    {% if current_user.role != 'viewer' %}<a class="nav-item {{ 'active' if path.startswith('/schedules') else '' }}" href="/schedules"><svg class="icon"><use href="#i-calendar"></use></svg> Schedules &amp; time off</a>
     <a class="nav-item {{ 'active' if path.startswith('/locations') else '' }}" href="/locations"><svg class="icon"><use href="#i-pin"></use></svg> Locations</a>
-    <a class="nav-item {{ 'active' if path.startswith('/field') else '' }}" href="/field"><svg class="icon"><use href="#i-phone"></use></svg> Field tracker</a>
+    <a class="nav-item {{ 'active' if path.startswith('/field') else '' }}" href="/field"><svg class="icon"><use href="#i-phone"></use></svg> Field tracker</a>{% endif %}
     {% if current_user.role in ['admin','manager'] %}<a class="nav-item {{ 'active' if path.startswith('/people') else '' }}" href="/people"><svg class="icon"><use href="#i-users"></use></svg> People</a>{% endif %}
-    <a class="nav-item {{ 'active' if path.startswith('/financials') else '' }}" href="/financials"><svg class="icon"><use href="#i-wallet"></use></svg> Financials</a>
+    {% if current_user.role in ['admin','manager'] or current_user.manage_it %}<a class="nav-item {{ 'active' if path.startswith('/it-management') else '' }}" href="/it-management"><svg class="icon"><use href="#i-settings"></use></svg> IT management</a>{% endif %}
+    {% if current_user.role in ['admin','manager'] or current_user.manage_it %}<a class="nav-item {{ 'active' if path == '/devices' or path.startswith('/devices/') else '' }}" href="/devices"><svg class="icon"><use href="#i-shield"></use></svg> Device management</a>{% endif %}
+    {% if current_user.role != 'viewer' %}<a class="nav-item {{ 'active' if path.startswith('/financials') else '' }}" href="/financials"><svg class="icon"><use href="#i-wallet"></use></svg> Financials</a>{% endif %}
 
-    {% if current_user.role in ['admin','manager'] %}
     <p class="nav-label mt-5">Organization</p>
     <a class="nav-item {{ 'active' if path.startswith('/reports') else '' }}" href="/reports"><svg class="icon"><use href="#i-chart"></use></svg> Reports &amp; exports</a>
-    <a class="nav-item {{ 'active' if path.startswith('/settings') else '' }}" href="/settings"><svg class="icon"><use href="#i-settings"></use></svg> Settings</a>
-    {% endif %}
+    {% if current_user.role in ['admin','manager'] %}<a class="nav-item {{ 'active' if path.startswith('/settings') else '' }}" href="/settings"><svg class="icon"><use href="#i-settings"></use></svg> Settings</a>{% endif %}
   </nav>
 
   <div class="border-t border-rail-line p-3">

@@ -33,6 +33,7 @@ class TrackerClient:
                 "note": event.note,
                 "idle_seconds": event.idle_seconds,
                 "heartbeat_interval_seconds": event.heartbeat_interval_seconds,
+                "transition": event.transition,
             },
         )
         response.raise_for_status()
@@ -42,6 +43,13 @@ class TrackerClient:
         response = self._client.get("/api/v1/configuration")
         response.raise_for_status()
         return response.json()
+
+    def automatic_tracking_consent(self, policy_id: str, accepted: bool) -> None:
+        response = self._client.post(
+            "/api/v1/automatic-tracking/consent",
+            json={"policy_id": policy_id, "accepted": accepted},
+        )
+        response.raise_for_status()
 
     def upload_usage(self, event: UsageEvent) -> None:
         response = self._client.post(

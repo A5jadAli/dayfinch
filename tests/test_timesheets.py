@@ -18,6 +18,7 @@ def _tracked_user(database: Database):
         )
     user = database.get_user(user_id)
     project = database.create_project("Alpha", "", admin["id"])
+    database.add_project_member(project["id"], user_id)
     _, token = database.create_device("Laptop", user_id, project["id"])
     return admin, user, database.authenticate_device(token)
 

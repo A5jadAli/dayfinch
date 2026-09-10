@@ -36,6 +36,7 @@ class QueuedRecord:
     screenshot_path: str
     active_url: str = ""
     automation_suspected: bool = False
+    screenshot_blurred: bool = False
 
     def fields(self, agent_version: str) -> dict[str, str]:
         values = asdict(self)
@@ -43,6 +44,7 @@ class QueuedRecord:
         values["record_id"] = values.pop("id")
         values["agent_version"] = agent_version
         values["automation_suspected"] = "1" if self.automation_suspected else "0"
+        values["screenshot_blurred"] = "1" if self.screenshot_blurred else "0"
         return {key: str(value) for key, value in values.items()}
 
 
@@ -56,6 +58,7 @@ class StateEvent:
     note: str
     idle_seconds: int
     heartbeat_interval_seconds: int
+    transition: bool = False
 
 
 @dataclass(frozen=True)
@@ -153,6 +156,7 @@ class OfflineQueue:
                     active_app TEXT NOT NULL,
                     active_url TEXT NOT NULL DEFAULT '',
                     automation_suspected INTEGER NOT NULL DEFAULT 0,
+                    screenshot_blurred INTEGER NOT NULL DEFAULT 0,
                     screenshot_path TEXT NOT NULL,
                     created_at TEXT NOT NULL
                 )
@@ -181,7 +185,17 @@ class OfflineQueue:
                     note TEXT NOT NULL DEFAULT '',
                     idle_seconds INTEGER NOT NULL DEFAULT 0,
                     heartbeat_interval_seconds INTEGER NOT NULL,
+                    transition INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS local_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 )
                 """
             )
@@ -206,12 +220,20 @@ class OfflineQueue:
                 connection.execute(
                     "ALTER TABLE queue ADD COLUMN automation_suspected INTEGER NOT NULL DEFAULT 0"
                 )
+            if "screenshot_blurred" not in columns:
+                connection.execute(
+                    "ALTER TABLE queue ADD COLUMN screenshot_blurred INTEGER NOT NULL DEFAULT 0"
+                )
             state_columns = {
                 row[1] for row in connection.execute("PRAGMA table_info(state_events)")
             }
             if "project_id" not in state_columns:
                 connection.execute(
                     "ALTER TABLE state_events ADD COLUMN project_id TEXT NOT NULL DEFAULT ''"
+                )
+            if "transition" not in state_columns:
+                connection.execute(
+                    "ALTER TABLE state_events ADD COLUMN transition INTEGER NOT NULL DEFAULT 0"
                 )
             if "note" not in state_columns:
                 connection.execute(
@@ -298,6 +320,7 @@ class OfflineQueue:
         note: str = "",
         idle_seconds: int = 0,
         heartbeat_interval_seconds: int = 60,
+        transition: bool = False,
         observed_at: datetime | None = None,
     ) -> StateEvent:
         """Journal a time-state event before attempting any network request."""
@@ -312,13 +335,14 @@ class OfflineQueue:
             note=note[:500],
             idle_seconds=max(0, int(idle_seconds)),
             heartbeat_interval_seconds=max(1, int(heartbeat_interval_seconds)),
+            transition=bool(transition),
         )
         with self._connect() as connection:
             connection.execute(
                 """INSERT INTO state_events(
                        id, observed_at, status, task_id, project_id, note, idle_seconds,
-                       heartbeat_interval_seconds, created_at
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       heartbeat_interval_seconds, transition, created_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     event.id,
                     event.observed_at,
@@ -328,6 +352,7 @@ class OfflineQueue:
                     self._seal_text(event.note, event.id, "note") if event.note else "",
                     event.idle_seconds,
                     event.heartbeat_interval_seconds,
+                    int(event.transition),
                     datetime.now(UTC).isoformat(),
                 ),
             )
@@ -351,6 +376,7 @@ class OfflineQueue:
                 note=self._open_text(row["note"], row["id"], "note"),
                 idle_seconds=row["idle_seconds"],
                 heartbeat_interval_seconds=row["heartbeat_interval_seconds"],
+                transition=bool(row["transition"]),
             )
             for row in rows
         ]
@@ -364,6 +390,33 @@ class OfflineQueue:
 
     def state_count(self) -> int:
         return self._pending_states
+
+    def local_state(self, key: str) -> str:
+        if not key or len(key) > 80:
+            raise ValueError("invalid local state key")
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT value FROM local_state WHERE key=?", (key,)
+            ).fetchone()
+        return self._open_text(row["value"], key, "local_state") if row else ""
+
+    def set_local_state(self, key: str, value: str) -> None:
+        if not key or len(key) > 80 or len(value) > 262_144:
+            raise ValueError("invalid local state value")
+        with self._connect() as connection:
+            if not value:
+                connection.execute("DELETE FROM local_state WHERE key=?", (key,))
+                return
+            connection.execute(
+                """INSERT INTO local_state(key,value,updated_at) VALUES (?,?,?)
+                   ON CONFLICT(key) DO UPDATE SET
+                       value=excluded.value,updated_at=excluded.updated_at""",
+                (
+                    key,
+                    self._seal_text(value, key, "local_state"),
+                    datetime.now(UTC).isoformat(),
+                ),
+            )
 
     def add_usage(
         self,
@@ -484,6 +537,7 @@ class OfflineQueue:
         captured_at: datetime | None = None,
         session_id: str = "",
         active_url: str = "",
+        screenshot_blurred: bool = False,
     ) -> QueuedRecord:
         record_id = str(uuid.uuid4())
         captured_at = captured_at or datetime.now(UTC)
@@ -502,14 +556,16 @@ class OfflineQueue:
             screenshot_path=str(image_path),
             active_url=active_url[:255],
             automation_suspected=activity.automation_suspected,
+            screenshot_blurred=screenshot_blurred,
         )
         with self._connect() as connection:
             connection.execute(
                 """INSERT INTO queue(
                        id, captured_at, keyboard_events, mouse_clicks, mouse_distance,
                        focused_seconds, interactive_seconds, session_id, active_app,
-                       active_url, automation_suspected, screenshot_path, created_at
-                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                       active_url, automation_suspected, screenshot_blurred,
+                       screenshot_path, created_at
+                   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     record.id,
                     record.captured_at,
@@ -522,6 +578,7 @@ class OfflineQueue:
                     self._seal_text(record.active_app, record.id, "active_app"),
                     self._seal_text(record.active_url, record.id, "active_url"),
                     1 if record.automation_suspected else 0,
+                    1 if record.screenshot_blurred else 0,
                     record.screenshot_path,
                     datetime.now(UTC).isoformat(),
                 ),
@@ -549,6 +606,7 @@ class OfflineQueue:
                 screenshot_path=row["screenshot_path"],
                 active_url=self._open_text(row["active_url"], row["id"], "active_url"),
                 automation_suspected=bool(row["automation_suspected"]),
+                screenshot_blurred=bool(row["screenshot_blurred"]),
             )
             for row in rows
         ]

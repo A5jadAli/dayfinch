@@ -38,12 +38,14 @@ def test_wifi_outage_keeps_time_activity_and_domain_then_syncs_in_order(tmp_path
         server_url="http://127.0.0.1:8000",
         device_token="offline-device-token-that-is-long-enough",
         consent_confirmed=True,
+        project_id="11111111-1111-4111-8111-111111111111",
         queue_dir=tmp_path / "queue",
     )
     agent = TrackerAgent(config)
     client = OfflineThenOnline()
     agent.client = client
 
+    agent.start_tracking()
     agent._send_heartbeat()
     agent.queue.add(
         b"\xff\xd8\xffoffline-capture",

@@ -14,13 +14,15 @@ class FakeBody:
 class FakeS3Client:
     def __init__(self):
         self.put_arguments = None
+        self.get_arguments = None
         self.delete_arguments = None
 
     def put_object(self, **arguments):
         self.put_arguments = arguments
         return {"VersionId": "version-123"}
 
-    def get_object(self, **_arguments):
+    def get_object(self, **arguments):
+        self.get_arguments = arguments
         return {"Body": FakeBody(), "ContentType": "image/jpeg"}
 
     def delete_object(self, **arguments):
@@ -55,7 +57,12 @@ def test_s3_storage_keeps_version_for_exact_deletion(tmp_path, monkeypatch):
     assert stored.key == "device-id/2026/07/27/record-id.jpg"
     assert stored.version_id == "version-123"
     assert client.put_arguments["ServerSideEncryption"] == "AES256"
-    assert storage.read(stored.key).data == b"\xff\xd8\xffstored"
+    assert storage.read(stored.key, stored.version_id).data == b"\xff\xd8\xffstored"
+    assert client.get_arguments == {
+        "Bucket": "private-captures",
+        "Key": stored.key,
+        "VersionId": "version-123",
+    }
 
     encrypted = storage.save_blob(
         "invoices/invoice-id.dfenc", b"ciphertext", "application/octet-stream"
@@ -63,6 +70,10 @@ def test_s3_storage_keeps_version_for_exact_deletion(tmp_path, monkeypatch):
     assert encrypted.key == "invoices/invoice-id.dfenc"
     assert client.put_arguments["ContentType"] == "application/octet-stream"
     assert client.put_arguments["ServerSideEncryption"] == "AES256"
+    assert (
+        storage.read_blob(encrypted.key, encrypted.version_id) == b"\xff\xd8\xffstored"
+    )
+    assert client.get_arguments["VersionId"] == "version-123"
 
     storage.delete(stored.key, stored.version_id)
     assert client.delete_arguments == {

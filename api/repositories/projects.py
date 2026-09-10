@@ -9,6 +9,40 @@ from .base import RepositoryMixin, utc_now
 
 
 class ProjectsRepository(RepositoryMixin):
+    @staticmethod
+    def _close_project_work(
+        connection, project_id: str, user_id: str | None = None
+    ) -> None:
+        user_clause = "AND ws.user_id=%s" if user_id else ""
+        parameters = (project_id, user_id) if user_id else (project_id,)
+        now = utc_now()
+        connection.execute(
+            f"""UPDATE work_session_segments seg
+                SET ended_at=GREATEST(%s,seg.started_at)
+                WHERE seg.ended_at IS NULL AND EXISTS (
+                    SELECT 1 FROM work_sessions ws
+                    WHERE ws.id=seg.session_id AND ws.project_id=%s {user_clause}
+                )""",
+            (now, *parameters),
+        )
+        connection.execute(
+            f"""UPDATE work_sessions ws
+                SET status='stopped',ended_at=GREATEST(%s,ws.started_at),updated_at=%s
+                WHERE ws.project_id=%s AND ws.status IN ('active','paused')
+                {user_clause}""",
+            (now, now, *parameters),
+        )
+        break_user_clause = "AND wb.user_id=%s" if user_id else ""
+        connection.execute(
+            f"""UPDATE work_breaks wb SET ended_at=GREATEST(%s,wb.started_at)
+                WHERE wb.ended_at IS NULL AND EXISTS (
+                    SELECT 1 FROM work_sessions ws
+                    WHERE ws.id=wb.session_id AND ws.project_id=%s
+                    {break_user_clause}
+                )""",
+            (now, *parameters),
+        )
+
     def create_project(
         self, name: str, description: str, created_by_user_id: str
     ) -> dict[str, Any]:
@@ -51,9 +85,14 @@ class ProjectsRepository(RepositoryMixin):
         where = (
             ""
             if user_id is None
-            else "WHERE EXISTS (SELECT 1 FROM project_members pm WHERE pm.project_id = p.id AND pm.user_id = %s)"
+            else """WHERE EXISTS (SELECT 1 FROM project_members pm
+                        WHERE pm.project_id=p.id AND pm.user_id=%s)
+                    OR EXISTS (SELECT 1 FROM team_leads tl
+                        JOIN team_projects tp ON tp.team_id=tl.team_id
+                        WHERE tp.project_id=p.id AND tl.user_id=%s
+                          AND tl.can_manage_projects=TRUE)"""
         )
-        parameters: tuple[Any, ...] = () if user_id is None else (user_id,)
+        parameters: tuple[Any, ...] = () if user_id is None else (user_id, user_id)
         with self.connect() as connection:
             rows = connection.execute(
                 f"""SELECT p.*,
@@ -65,16 +104,55 @@ class ProjectsRepository(RepositoryMixin):
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def add_project_member(self, project_id: str, user_id: str) -> None:
+    def list_trackable_projects(
+        self, user_id: str | None = None
+    ) -> list[dict[str, Any]]:
+        membership = (
+            ""
+            if user_id is None
+            else """AND EXISTS (
+                       SELECT 1 FROM project_members pm
+                       WHERE pm.project_id=p.id AND pm.user_id=%s
+                         AND pm.project_role IN ('worker','manager')
+                    )"""
+        )
+        parameters = () if user_id is None else (user_id,)
+        with self.connect() as connection:
+            rows = connection.execute(
+                f"""SELECT p.*,
+                           (SELECT COUNT(*) FROM project_members pm
+                            WHERE pm.project_id=p.id) member_count,
+                           (SELECT COUNT(*) FROM devices d
+                            WHERE d.project_id=p.id) device_count
+                    FROM projects p WHERE p.enabled=TRUE {membership}
+                    ORDER BY lower(p.name)""",
+                parameters,
+            ).fetchall()
+        return [dict(row) for row in rows]
+
+    def add_project_member(
+        self, project_id: str, user_id: str, project_role: str = "worker"
+    ) -> None:
+        if project_role not in {"worker", "manager", "viewer"}:
+            raise ValueError("Invalid project role")
         with self.connect() as connection:
             connection.execute(
-                """INSERT INTO project_members(project_id, user_id, added_at)
-                   VALUES (%s, %s, %s) ON CONFLICT DO NOTHING""",
-                (project_id, user_id, utc_now()),
+                """INSERT INTO project_members(
+                       project_id,user_id,added_at,project_role
+                   ) VALUES (%s,%s,%s,%s)
+                   ON CONFLICT(project_id,user_id) DO UPDATE
+                   SET project_role=EXCLUDED.project_role""",
+                (project_id, user_id, utc_now(), project_role),
             )
 
     def remove_project_member(self, project_id: str, user_id: str) -> None:
         with self.connect() as connection:
+            self._close_project_work(connection, project_id, user_id)
+            connection.execute(
+                """UPDATE devices SET project_id=NULL
+                   WHERE project_id=%s AND owner_user_id=%s""",
+                (project_id, user_id),
+            )
             connection.execute(
                 "DELETE FROM project_members WHERE project_id=%s AND user_id=%s",
                 (project_id, user_id),
@@ -82,10 +160,18 @@ class ProjectsRepository(RepositoryMixin):
 
     def set_project_enabled(self, project_id: str, enabled: bool) -> None:
         with self.connect() as connection:
-            connection.execute(
+            result = connection.execute(
                 "UPDATE projects SET enabled=%s,archived_at=CASE WHEN %s THEN NULL ELSE CURRENT_TIMESTAMP END WHERE id=%s",
                 (enabled, enabled, project_id),
             )
+            if result.rowcount != 1:
+                raise ValueError("Project not found")
+            if not enabled:
+                self._close_project_work(connection, project_id)
+                connection.execute(
+                    "UPDATE devices SET project_id=NULL WHERE project_id=%s",
+                    (project_id,),
+                )
 
     def is_project_member(self, project_id: str, user_id: str) -> bool:
         with self.connect() as connection:
@@ -95,10 +181,41 @@ class ProjectsRepository(RepositoryMixin):
             ).fetchone()
         return row is not None
 
+    def project_member_role(self, project_id: str, user_id: str) -> str | None:
+        with self.connect() as connection:
+            row = connection.execute(
+                """SELECT project_role FROM project_members
+                   WHERE project_id=%s AND user_id=%s""",
+                (project_id, user_id),
+            ).fetchone()
+        return str(row["project_role"]) if row else None
+
+    def set_project_member_role(
+        self, project_id: str, user_id: str, project_role: str
+    ) -> None:
+        if project_role not in {"worker", "manager", "viewer"}:
+            raise ValueError("Invalid project role")
+        with self.connect() as connection:
+            result = connection.execute(
+                """UPDATE project_members SET project_role=%s
+                   WHERE project_id=%s AND user_id=%s""",
+                (project_role, project_id, user_id),
+            )
+            if result.rowcount != 1:
+                raise ValueError("Project member not found")
+            if project_role == "viewer":
+                self._close_project_work(connection, project_id, user_id)
+                connection.execute(
+                    """UPDATE devices SET project_id=NULL
+                       WHERE project_id=%s AND owner_user_id=%s""",
+                    (project_id, user_id),
+                )
+
     def list_project_members(self, project_id: str) -> list[dict[str, Any]]:
         with self.connect() as connection:
             rows = connection.execute(
-                """SELECT u.id, u.email, u.role, u.enabled, pm.added_at
+                """SELECT u.id, u.email, u.role, u.enabled, pm.added_at,
+                          pm.project_role
                    FROM project_members pm JOIN users u ON u.id = pm.user_id
                    WHERE pm.project_id = %s ORDER BY lower(u.email)""",
                 (project_id,),

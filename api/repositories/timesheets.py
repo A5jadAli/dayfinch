@@ -157,9 +157,17 @@ class TimesheetRepository(RepositoryMixin):
             ).fetchone()
         return dict(row) if row else None
 
-    def list_timesheets(self, user_id: str | None = None) -> list[dict[str, Any]]:
-        where = "WHERE ts.user_id = %s" if user_id else ""
-        parameters = (user_id,) if user_id else ()
+    def list_timesheets(
+        self, user_id: str | None = None, *, user_ids: list[str] | None = None
+    ) -> list[dict[str, Any]]:
+        if user_id and user_ids is not None:
+            raise ValueError("Choose one timesheet user scope")
+        if user_id:
+            where, parameters = "WHERE ts.user_id = %s", (user_id,)
+        elif user_ids is not None:
+            where, parameters = "WHERE ts.user_id=ANY(%s::uuid[])", (user_ids,)
+        else:
+            where, parameters = "", ()
         with self.connect() as connection:
             rows = connection.execute(
                 f"""SELECT ts.*, u.email, u.full_name, u.pay_rate,

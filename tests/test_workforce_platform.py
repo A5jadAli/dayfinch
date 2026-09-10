@@ -67,6 +67,10 @@ def test_workforce_approval_and_finance_workflows(database):
     database.set_user_profile(
         member["id"], "member", "Alex", Decimal("40"), Decimal("90"), 2400
     )
+    timesheet = database.submit_timesheet(
+        member["id"], date(2026, 9, 1), date(2026, 9, 7)
+    )
+    database.review_timesheet(timesheet["id"], admin["id"], "approved", "")
     database.create_payroll(member["id"], date(2026, 9, 1), date(2026, 9, 7), "USD")
     finance = database.finance_summary()
     assert finance["invoices"][0]["subtotal"] == Decimal("250")
@@ -137,7 +141,24 @@ def test_tracking_policy_round_trip(database):
 
 
 def test_signed_payroll_dispatch_and_callback(database, monkeypatch):
-    admin, member, _ = _team(database)
+    admin, member, project = _team(database)
+    database.set_user_profile(
+        member["id"], "member", "Member", Decimal("30"), Decimal("60"), 2400
+    )
+    started = datetime(2026, 9, 1, 9, tzinfo=UTC)
+    entry = database.add_manual_time(
+        member["id"],
+        project["id"],
+        None,
+        started,
+        started + timedelta(hours=1),
+        "Approved work",
+    )
+    database.review_item("manual_time_entries", entry, admin["id"], "approved")
+    timesheet = database.submit_timesheet(
+        member["id"], date(2026, 9, 1), date(2026, 9, 7)
+    )
+    database.review_timesheet(timesheet["id"], admin["id"], "approved", "")
     payment_id = database.create_payroll(
         member["id"], date(2026, 9, 1), date(2026, 9, 7), "USD"
     )

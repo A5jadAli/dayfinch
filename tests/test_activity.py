@@ -27,6 +27,20 @@ def test_pause_discards_activity():
     assert monitor.snapshot_and_reset().mouse_clicks == 0
 
 
+def test_stopped_monitor_remembers_only_recent_activity_not_counts(monkeypatch):
+    monitor = ActivityMonitor()
+    monitor._input_available = True
+    monitor.set_enabled(False)
+    monkeypatch.setattr("agent.activity.time.monotonic", lambda: 100.0)
+
+    monitor._on_press("secret key value must never be retained")
+    snapshot = monitor.snapshot_and_reset()
+
+    assert monitor.seconds_since_input(now=101.0) == 1.0
+    assert snapshot.keyboard_events == 0
+    assert snapshot.mouse_clicks == 0
+
+
 def test_foreground_observation_counts_reading_without_faking_input():
     monitor = ActivityMonitor(max_observation_gap=15)
     monitor.observe("Editor", now=10)

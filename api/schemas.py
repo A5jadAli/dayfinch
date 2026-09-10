@@ -17,6 +17,7 @@ class Heartbeat(BaseModel):
     note: str = Field(default="", max_length=500)
     idle_seconds: int = Field(default=0, ge=0, le=86_400)
     heartbeat_interval_seconds: int = Field(default=60, ge=15, le=3_600)
+    transition: bool = False
 
 
 class LocationPoint(BaseModel):
@@ -34,6 +35,11 @@ class UsagePoint(BaseModel):
     active_app: str = Field(default="", max_length=160)
     active_url: str = Field(default="", max_length=255)
     focused_seconds: int = Field(default=0, ge=0, le=3600)
+
+
+class AutomaticTrackingConsent(BaseModel):
+    policy_id: UUID
+    accepted: bool
 
 
 class FieldTimerEvent(BaseModel):

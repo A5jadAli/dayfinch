@@ -22,8 +22,10 @@ def test_agent_ingest_rejects_clock_payload_file_and_session_edges(
     app = create_app(settings)
     with TestClient(app) as client:
         database = app.state.database
-        first, first_token = database.create_device("First")
-        _, second_token = database.create_device("Second")
+        admin = database.get_user_by_email(settings.admin_email)
+        project = database.create_project("Edge project", "", admin["id"])
+        first, first_token = database.create_device("First", admin["id"], project["id"])
+        _, second_token = database.create_device("Second", admin["id"], project["id"])
         first_headers = {"Authorization": f"Bearer {first_token}"}
         second_headers = {"Authorization": f"Bearer {second_token}"}
         base = {
@@ -60,6 +62,30 @@ def test_agent_ingest_rejects_clock_payload_file_and_session_edges(
         active = client.post("/api/v1/heartbeat", headers=first_headers, json=base)
         assert active.status_code == 200
         session_id = active.json()["session_id"]
+        timestamp_edge_payload = {
+            "record_id": "5a6edcff-62af-43ab-97a4-73d69de6584c",
+            "keyboard_events": "0",
+            "mouse_clicks": "0",
+            "mouse_distance": "0",
+            "active_app": "Editor",
+            "agent_version": "test",
+        }
+        for captured_at in (
+            datetime.now(UTC) + timedelta(minutes=6),
+            datetime.now(UTC) - timedelta(days=91),
+        ):
+            timestamp_edge = client.post(
+                "/api/v1/activity",
+                headers=first_headers,
+                data={
+                    **timestamp_edge_payload,
+                    "captured_at": captured_at.isoformat(),
+                },
+                files={
+                    "screenshot_file": ("capture.jpg", b"\xff\xd8\xffok", "image/jpeg")
+                },
+            )
+            assert timestamp_edge.status_code == 422
         payload = {
             "record_id": "not-a-uuid",
             "captured_at": datetime.now(UTC).isoformat(),
@@ -113,4 +139,12 @@ def test_agent_ingest_rejects_clock_payload_file_and_session_edges(
             files={"screenshot_file": ("capture.jpg", b"\xff\xd8\xffok", "image/jpeg")},
         )
         assert cross_device.status_code == 422
+        payload.pop("session_id")
+        no_session = client.post(
+            "/api/v1/activity",
+            headers=second_headers,
+            data=payload,
+            files={"screenshot_file": ("capture.jpg", b"\xff\xd8\xffok", "image/jpeg")},
+        )
+        assert no_session.status_code == 409
         assert not database.list_records(first["id"])

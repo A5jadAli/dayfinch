@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 
-from ..schemas import Heartbeat, LocationPoint, UsagePoint
+from ..schemas import AutomaticTrackingConsent, Heartbeat, LocationPoint, UsagePoint
 from ..services.privacy import normalize_domain
 from .dependencies import device_from_authorization
 
@@ -20,6 +20,10 @@ def ingest_usage(
     payload: UsagePoint,
     device: dict[str, Any] = Depends(device_from_authorization),
 ) -> dict[str, str]:
+    if device.get("tracker_kind", "desktop") != "desktop":
+        raise HTTPException(
+            status_code=403, detail="Activity collection requires a desktop tracker"
+        )
     observed = payload.observed_at
     if observed.tzinfo is None:
         raise HTTPException(status_code=422, detail="observed_at must include timezone")
@@ -30,8 +34,13 @@ def ingest_usage(
             status_code=422, detail="usage timestamp is outside replay window"
         )
     database = request.app.state.database
-    policy = database.organization_settings()
     session = database.get_work_session_for_capture(device["id"], observed)
+    if not session:
+        raise HTTPException(
+            status_code=409,
+            detail="No tracked work session covers this usage sample",
+        )
+    policy = database.effective_tracking_settings(session["user_id"])
     created = database.add_usage_record(
         {
             "id": str(payload.event_id),
@@ -64,14 +73,27 @@ def ingest_location(
     recorded = payload.recorded_at
     if recorded.tzinfo is None:
         raise HTTPException(status_code=422, detail="recorded_at must include timezone")
-    active = request.app.state.database.active_timer(device.get("owner_user_id"))
+    recorded = recorded.astimezone(UTC)
+    now = datetime.now(UTC)
+    if recorded > now + timedelta(minutes=5) or recorded < now - timedelta(days=90):
+        raise HTTPException(
+            status_code=422, detail="location timestamp is outside replay window"
+        )
+    session = request.app.state.database.get_work_session_for_capture(
+        device["id"], recorded
+    )
+    if not session:
+        raise HTTPException(
+            status_code=409,
+            detail="No tracked work session covers this location sample",
+        )
     created = request.app.state.database.add_location(
         {
             "id": str(payload.event_id),
             "device_id": device["id"],
             "user_id": device.get("owner_user_id"),
-            "session_id": active["id"] if active else None,
-            "recorded_at": recorded.astimezone(UTC),
+            "session_id": session["id"],
+            "recorded_at": recorded,
             "latitude": payload.latitude,
             "longitude": payload.longitude,
             "accuracy_meters": payload.accuracy_meters,
@@ -87,23 +109,77 @@ def configuration(
     device: dict[str, Any] = Depends(device_from_authorization),
 ) -> dict[str, Any]:
     """Return centrally managed collection policy and the member's work catalog."""
-    settings = request.app.state.database.organization_settings()
-    projects = request.app.state.database.list_projects(device.get("owner_user_id"))
+    database = request.app.state.database
+    owner = database.get_user(device.get("owner_user_id"))
+    settings = database.effective_tracking_settings(owner["id"] if owner else None)
+    projects = (
+        database.list_trackable_projects(
+            owner["id"] if owner["role"] == "member" else None
+        )
+        if owner
+        else []
+    )
+    automatic = database.automatic_tracking_for_user(owner["id"]) if owner else None
     return {
         "screenshot_frequency": settings["screenshot_frequency"],
         "screenshot_blur": settings["screenshot_blur"],
         "track_apps": settings["track_apps"],
         "track_urls": settings["track_urls"],
+        "allowed_apps": settings["allowed_apps"],
         "idle_timeout_minutes": settings["idle_timeout_minutes"],
         "projects": [
             {
                 "id": project["id"],
                 "name": project["name"],
-                "tasks": request.app.state.database.list_tasks(project["id"]),
+                "tasks": database.list_tasks(
+                    project["id"], user_id=owner["id"] if owner else None
+                ),
             }
             for project in projects
         ],
+        "automatic_tracking": (
+            {
+                "id": automatic["id"],
+                "name": automatic["name"],
+                "rule_type": automatic["rule_type"],
+                "project_id": automatic["project_id"],
+                "wait_for_activity": automatic["wait_for_activity"],
+                "schedule": automatic["schedule"],
+                "consent_status": automatic["consent_status"],
+                "updated_at": automatic["updated_at"],
+                "shift_windows": automatic["shift_windows"],
+            }
+            if automatic
+            else None
+        ),
     }
+
+
+@router.post("/automatic-tracking/consent")
+def automatic_tracking_consent(
+    request: Request,
+    payload: AutomaticTrackingConsent,
+    device: dict[str, Any] = Depends(device_from_authorization),
+) -> dict[str, str]:
+    owner_id = device.get("owner_user_id")
+    if (
+        not owner_id
+        or not request.app.state.database.respond_to_automatic_tracking_policy(
+            owner_id, str(payload.policy_id), payload.accepted
+        )
+    ):
+        raise HTTPException(
+            status_code=404, detail="Automatic tracking policy not found"
+        )
+    request.app.state.database.add_audit_event(
+        owner_id,
+        "automatic_tracking.accepted"
+        if payload.accepted
+        else "automatic_tracking.declined",
+        "automatic_tracking_policy",
+        str(payload.policy_id),
+    )
+    return {"status": "accepted" if payload.accepted else "declined"}
 
 
 @router.post("/heartbeat")
@@ -138,6 +214,7 @@ def heartbeat(
             observed_at=observed,
             idle_seconds=payload.idle_seconds,
             heartbeat_interval_seconds=payload.heartbeat_interval_seconds,
+            transition=payload.transition,
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -162,20 +239,30 @@ async def ingest_activity(
     session_id: Annotated[str, Form(max_length=40)] = "",
     active_url: Annotated[str, Form(max_length=255)] = "",
     automation_suspected: Annotated[bool, Form()] = False,
+    screenshot_blurred: Annotated[bool, Form()] = False,
 ) -> dict[str, str]:
+    if device.get("tracker_kind", "desktop") != "desktop":
+        raise HTTPException(
+            status_code=403, detail="Activity collection requires a desktop tracker"
+        )
     database = request.app.state.database
     storage = request.app.state.storage
     settings = request.app.state.settings
-    policy = database.organization_settings()
+    policy = database.effective_tracking_settings(device.get("owner_user_id"))
     if policy["screenshot_frequency"] <= 0:
         raise HTTPException(
             status_code=403, detail="Screenshot collection is disabled by policy"
+        )
+    if policy["screenshot_blur"] and not screenshot_blurred:
+        raise HTTPException(
+            status_code=403, detail="Screenshot blur is required by policy"
         )
     try:
         parsed_id = str(uuid.UUID(record_id))
         captured = datetime.fromisoformat(captured_at.replace("Z", "+00:00"))
         if captured.tzinfo is None:
             raise ValueError("timezone required")
+        captured = captured.astimezone(UTC)
     except ValueError as exc:
         raise HTTPException(
             status_code=422, detail="Invalid record id or timestamp"
@@ -184,12 +271,23 @@ async def ingest_activity(
     if database.record_exists(parsed_id):
         return {"status": "duplicate", "record_id": parsed_id}
 
+    now = datetime.now(UTC)
+    if captured > now + timedelta(minutes=5) or captured < now - timedelta(days=90):
+        raise HTTPException(
+            status_code=422, detail="capture timestamp is outside replay window"
+        )
+
     session = database.get_work_session(session_id) if session_id else None
     if session and session["device_id"] != device["id"]:
         raise HTTPException(status_code=422, detail="Session does not belong to device")
     # captured_at, not an old in-memory session id, is authoritative after an
     # offline task switch or process restart.
     session = database.get_work_session_for_capture(device["id"], captured)
+    if not session:
+        raise HTTPException(
+            status_code=409,
+            detail="No tracked work session covers this screenshot",
+        )
 
     data = await screenshot_file.read(settings.max_upload_bytes + 1)
     if not data or len(data) > settings.max_upload_bytes:
@@ -233,7 +331,7 @@ async def ingest_activity(
             if automation_suspected or focused_seconds <= 0
             else min(100, round(interactive_seconds * 100 / focused_seconds)),
             "source": "desktop",
-            "screenshot_blurred": policy["screenshot_blur"],
+            "screenshot_blurred": screenshot_blurred,
             "user_id": session["user_id"] if session else device.get("owner_user_id"),
             "project_id": session["project_id"]
             if session

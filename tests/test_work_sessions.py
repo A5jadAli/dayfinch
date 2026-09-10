@@ -1,6 +1,8 @@
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from api.database import Database
 
 
@@ -69,6 +71,82 @@ def test_changing_task_stops_old_session_and_preserves_capture_attribution(
     assert record["session_id"] == second["id"]
 
 
+def test_explicit_start_switches_devices_and_displaced_heartbeats_cannot_steal_back(
+    database: Database,
+):
+    admin, project, task, first_device = _setup(database)
+    _, second_token = database.create_device(
+        "Second laptop", admin["id"], project["id"]
+    )
+    second_device = database.authenticate_device(second_token)
+    started = datetime(2026, 9, 8, 8, 0, tzinfo=UTC)
+    first = _event(
+        database,
+        first_device,
+        "active",
+        task["id"],
+        started,
+        transition=True,
+    )
+
+    second = _event(
+        database,
+        second_device,
+        "active",
+        task["id"],
+        started + timedelta(minutes=1),
+        transition=True,
+    )
+
+    assert database.get_work_session(first["id"])["status"] == "stopped"
+    assert second["status"] == "active"
+    with pytest.raises(ValueError, match="press Start to switch"):
+        _event(
+            database,
+            first_device,
+            "active",
+            task["id"],
+            started + timedelta(minutes=2),
+            transition=False,
+        )
+    with database.connect() as connection:
+        open_sessions = connection.execute(
+            """SELECT id FROM work_sessions
+               WHERE user_id=%s AND status IN ('active','paused')""",
+            (admin["id"],),
+        ).fetchall()
+    assert [row["id"] for row in open_sessions] == [second["id"]]
+
+
+def test_stale_explicit_start_cannot_replace_a_newer_device_session(database: Database):
+    admin, project, task, first_device = _setup(database)
+    _, second_token = database.create_device(
+        "Second laptop", admin["id"], project["id"]
+    )
+    second_device = database.authenticate_device(second_token)
+    newer = datetime(2026, 9, 8, 10, 0, tzinfo=UTC)
+    second = _event(
+        database,
+        second_device,
+        "active",
+        task["id"],
+        newer,
+        transition=True,
+    )
+
+    with pytest.raises(ValueError, match="newer time"):
+        _event(
+            database,
+            first_device,
+            "active",
+            task["id"],
+            newer - timedelta(hours=1),
+            transition=True,
+        )
+
+    assert database.get_work_session(second["id"])["status"] == "active"
+
+
 def test_task_from_another_project_is_rejected(database: Database):
     admin, _, _, device = _setup(database)
     other = database.create_project("Beta", "", admin["id"])
@@ -80,6 +158,24 @@ def test_task_from_another_project_is_rejected(database: Database):
         assert "device's project" in str(exc)
     else:
         raise AssertionError("cross-project task should be rejected")
+
+
+def test_project_viewer_device_cannot_start_tracking(database: Database):
+    admin, project, task, _ = _setup(database)
+    _, invite_token = database.create_invitation("viewer@example.test", admin["id"], 24)
+    viewer = database.accept_invitation(invite_token, "hash")
+    database.add_project_member(project["id"], viewer["id"])
+    with database.connect() as connection:
+        connection.execute(
+            "UPDATE users SET role='viewer' WHERE id=%s", (viewer["id"],)
+        )
+    _, device_token = database.create_device(
+        "Viewer laptop", viewer["id"], project["id"]
+    )
+    device = database.authenticate_device(device_token)
+
+    with pytest.raises(ValueError, match="viewers cannot track"):
+        database.sync_work_session(device, "active", task["id"])
 
 
 def _event(database, device, status, task_id, when, **values):

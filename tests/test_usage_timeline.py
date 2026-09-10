@@ -84,10 +84,31 @@ def test_usage_policy_removes_application_and_domain(tmp_path, postgres_url):
     app = create_app(_settings(tmp_path, postgres_url))
     with TestClient(app) as client:
         database = app.state.database
-        _, token = database.create_device("Policy usage laptop")
+        admin = database.get_user_by_email("usage-admin@example.test")
+        project = database.create_project("Policy usage project", "", admin["id"])
+        _, token = database.create_device(
+            "Policy usage laptop", admin["id"], project["id"]
+        )
         database.update_organization_settings(
             {"track_apps": False, "track_urls": False}
         )
+        blocked = client.post(
+            "/api/v1/usage",
+            headers={"Authorization": f"Bearer {token}"},
+            json={
+                "event_id": "7102187a-11c1-4f99-a3bb-85c4d4f078a1",
+                "observed_at": datetime.now(UTC).isoformat(),
+                "active_app": "Must not persist",
+                "focused_seconds": 10,
+            },
+        )
+        assert blocked.status_code == 409
+        heartbeat = client.post(
+            "/api/v1/heartbeat",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"platform": "Test", "status": "active"},
+        )
+        assert heartbeat.status_code == 200
         event_id = "6102187a-11c1-4f99-a3bb-85c4d4f078a1"
         response = client.post(
             "/api/v1/usage",

@@ -13,7 +13,10 @@ class DevicesRepository(RepositoryMixin):
         name: str,
         owner_user_id: str | None = None,
         project_id: str | None = None,
+        tracker_kind: str = "desktop",
     ) -> tuple[dict[str, Any], str]:
+        if tracker_kind not in {"desktop", "mobile"}:
+            raise ValueError("Tracker kind must be desktop or mobile")
         raw_token = secrets.token_urlsafe(32)
         device = {
             "id": str(uuid.uuid4()),
@@ -21,11 +24,13 @@ class DevicesRepository(RepositoryMixin):
             "created_at": utc_now(),
             "owner_user_id": owner_user_id,
             "project_id": project_id,
+            "tracker_kind": tracker_kind,
         }
         with self.connect() as connection:
             connection.execute(
-                """INSERT INTO devices(id, name, token_hash, created_at, owner_user_id, project_id)
-                   VALUES (%s, %s, %s, %s, %s, %s)""",
+                """INSERT INTO devices(id,name,token_hash,created_at,owner_user_id,
+                                         project_id,tracker_kind)
+                   VALUES (%s,%s,%s,%s,%s,%s,%s)""",
                 (
                     device["id"],
                     device["name"],
@@ -33,6 +38,7 @@ class DevicesRepository(RepositoryMixin):
                     device["created_at"],
                     owner_user_id,
                     project_id,
+                    tracker_kind,
                 ),
             )
         return device, raw_token
@@ -57,7 +63,10 @@ class DevicesRepository(RepositoryMixin):
             )
 
     def list_devices(
-        self, owner_user_id: str | None = None, project_id: str | None = None
+        self,
+        owner_user_id: str | None = None,
+        project_id: str | None = None,
+        project_member_id: str | None = None,
     ) -> list[dict[str, Any]]:
         filters: list[str] = []
         values: list[str] = []
@@ -67,6 +76,12 @@ class DevicesRepository(RepositoryMixin):
         if project_id is not None:
             filters.append("d.project_id = %s")
             values.append(project_id)
+        if project_member_id is not None:
+            filters.append(
+                "EXISTS (SELECT 1 FROM project_members pm "
+                "WHERE pm.project_id=d.project_id AND pm.user_id=%s)"
+            )
+            values.append(project_member_id)
         where = f"WHERE {' AND '.join(filters)}" if filters else ""
         with self.connect() as connection:
             rows = connection.execute(
@@ -95,7 +110,39 @@ class DevicesRepository(RepositoryMixin):
 
     def set_device_enabled(self, device_id: str, enabled: bool) -> None:
         with self.connect() as connection:
+            device = connection.execute(
+                "SELECT id FROM devices WHERE id=%s FOR UPDATE", (device_id,)
+            ).fetchone()
+            if not device:
+                return
             connection.execute(
                 "UPDATE devices SET enabled = %s WHERE id = %s",
                 (enabled, device_id),
             )
+            if not enabled:
+                observed_at = utc_now()
+                connection.execute(
+                    """UPDATE work_session_segments seg
+                       SET ended_at=GREATEST(%s,seg.started_at)
+                       WHERE seg.ended_at IS NULL AND EXISTS (
+                         SELECT 1 FROM work_sessions ws
+                         WHERE ws.id=seg.session_id AND ws.device_id=%s
+                       )""",
+                    (observed_at, device_id),
+                )
+                connection.execute(
+                    """UPDATE work_breaks b
+                       SET ended_at=GREATEST(%s,b.started_at)
+                       WHERE b.ended_at IS NULL AND EXISTS (
+                         SELECT 1 FROM work_sessions ws
+                         WHERE ws.id=b.session_id AND ws.device_id=%s
+                       )""",
+                    (observed_at, device_id),
+                )
+                connection.execute(
+                    """UPDATE work_sessions SET
+                         status='stopped',ended_at=GREATEST(%s,started_at),
+                         updated_at=%s
+                       WHERE device_id=%s AND status IN ('active','paused')""",
+                    (observed_at, observed_at, device_id),
+                )

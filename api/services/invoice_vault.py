@@ -51,26 +51,73 @@ class InvoiceVault:
         invoice = self.database.invoice_snapshot(invoice_id)
         if not invoice:
             raise InvoiceVaultError("Invoice not found")
+        self._seal_snapshot(
+            invoice_id,
+            invoice,
+            f"invoices/{invoice_id}.dfenc",
+            invoice_id.encode(),
+            self.database.record_invoice_document,
+        )
+        return self.database.invoice_snapshot(invoice_id) or {}
+
+    def seal_team(self, invoice_id: str) -> dict[str, Any]:
+        invoice = self.database.team_invoice_snapshot(invoice_id)
+        if not invoice:
+            raise InvoiceVaultError("Team invoice not found")
+        self._seal_snapshot(
+            invoice_id,
+            invoice,
+            f"team-invoices/{invoice_id}.dfenc",
+            f"team:{invoice_id}".encode(),
+            self.database.record_team_invoice_document,
+        )
+        return self.database.team_invoice_snapshot(invoice_id) or {}
+
+    def _seal_snapshot(
+        self,
+        invoice_id: str,
+        invoice: dict[str, Any],
+        key: str,
+        associated_data: bytes,
+        recorder,
+    ) -> None:
         plaintext = json.dumps(
             invoice, default=str, sort_keys=True, separators=(",", ":")
         ).encode()
         nonce = os.urandom(12)
         ciphertext = (
-            MAGIC + nonce + self.aead.encrypt(nonce, plaintext, invoice_id.encode())
+            MAGIC + nonce + self.aead.encrypt(nonce, plaintext, associated_data)
         )
-        key = f"invoices/{invoice_id}.dfenc"
-        stored = self.storage.save_blob(key, ciphertext, "application/octet-stream")
+        try:
+            stored = self.storage.save_blob(key, ciphertext, "application/octet-stream")
+        except Exception as exc:
+            raise InvoiceVaultError("Encrypted invoice storage failed") from exc
         digest = hashlib.sha256(ciphertext).hexdigest()
-        self.database.record_invoice_document(
-            invoice_id, stored.key, stored.version_id, digest
-        )
-        return self.database.invoice_snapshot(invoice_id) or {}
+        recorder(invoice_id, stored.key, stored.version_id, digest)
 
     def open(self, invoice_id: str) -> dict[str, Any]:
         invoice = self.database.invoice_snapshot(invoice_id)
         if not invoice or not invoice.get("encrypted_document_key"):
             raise InvoiceVaultError("Invoice document has not been sealed")
-        ciphertext = self.storage.read_blob(invoice["encrypted_document_key"])
+        return self._open_snapshot(invoice, invoice_id.encode())
+
+    def open_team(self, invoice_id: str) -> dict[str, Any]:
+        invoice = self.database.team_invoice_snapshot(invoice_id)
+        if not invoice or not invoice.get("encrypted_document_key"):
+            raise InvoiceVaultError("Team invoice document has not been sealed")
+        return self._open_snapshot(invoice, f"team:{invoice_id}".encode())
+
+    def _open_snapshot(
+        self, invoice: dict[str, Any], associated_data: bytes
+    ) -> dict[str, Any]:
+        try:
+            ciphertext = self.storage.read_blob(
+                invoice["encrypted_document_key"], invoice.get("document_version_id")
+            )
+        except Exception as exc:
+            raise InvoiceVaultError(
+                "Encrypted invoice document is unavailable"
+            ) from exc
         if (
             not hashlib.sha256(ciphertext).hexdigest()
             == invoice["encrypted_document_sha256"]
@@ -81,7 +128,7 @@ class InvoiceVault:
         nonce = ciphertext[len(MAGIC) : len(MAGIC) + 12]
         try:
             plaintext = self.aead.decrypt(
-                nonce, ciphertext[len(MAGIC) + 12 :], invoice_id.encode()
+                nonce, ciphertext[len(MAGIC) + 12 :], associated_data
             )
             return json.loads(plaintext)
         except (InvalidTag, ValueError, json.JSONDecodeError) as exc:

@@ -17,6 +17,7 @@ def test_wayland_diagnostics_are_transparent_about_input_limits(monkeypatch):
     monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
     monkeypatch.setattr(diagnostics, "_portal_available", lambda: True)
     monkeypatch.setattr(diagnostics, "_linux_idle_seconds", lambda: 10.0)
+    monkeypatch.setattr(diagnostics.shutil, "which", lambda _name: "/usr/bin/gst")
     monkeypatch.setattr(
         diagnostics,
         "_dependency_check",
@@ -31,4 +32,22 @@ def test_wayland_diagnostics_are_transparent_about_input_limits(monkeypatch):
     assert by_name["aggregate-input"].status == "warn"
     assert "blocks passive" in by_name["aggregate-input"].message
     assert by_name["session-idle"].status == "pass"
+    assert by_name["capture-consent-persistence"].status == "pass"
+    assert "rotating restore tokens" in by_name["capture-consent-persistence"].message
+
+
+def test_wayland_diagnostics_warn_when_pipewire_converter_is_missing(monkeypatch):
+    monkeypatch.setenv("XDG_SESSION_TYPE", "wayland")
+    monkeypatch.setattr(diagnostics, "_portal_available", lambda: True)
+    monkeypatch.setattr(diagnostics, "_linux_idle_seconds", lambda: None)
+    monkeypatch.setattr(diagnostics.shutil, "which", lambda _name: None)
+    monkeypatch.setattr(
+        diagnostics,
+        "_dependency_check",
+        lambda _module, name: DiagnosticCheck(name, "pass", "available"),
+    )
+
+    by_name = {check.name: check for check in diagnostics._linux_checks()}
+
     assert by_name["capture-consent-persistence"].status == "warn"
+    assert "GStreamer" in by_name["capture-consent-persistence"].message

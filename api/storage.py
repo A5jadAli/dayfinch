@@ -32,7 +32,7 @@ class ScreenshotStore(Protocol):
         self, device_id: str, record_id: str, captured_at: datetime, data: bytes
     ) -> StoredScreenshot: ...
 
-    def read(self, key: str) -> ScreenshotContent: ...
+    def read(self, key: str, version_id: str | None = None) -> ScreenshotContent: ...
 
     def delete(self, key: str, version_id: str | None = None) -> None: ...
 
@@ -40,7 +40,7 @@ class ScreenshotStore(Protocol):
         self, key: str, data: bytes, content_type: str
     ) -> StoredScreenshot: ...
 
-    def read_blob(self, key: str) -> bytes: ...
+    def read_blob(self, key: str, version_id: str | None = None) -> bytes: ...
 
 
 def image_type(data: bytes) -> tuple[str, str]:
@@ -109,7 +109,8 @@ class LocalScreenshotStorage:
     def resolve(self, key: str) -> Path:
         return self._resolve(key)
 
-    def read(self, key: str) -> ScreenshotContent:
+    def read(self, key: str, version_id: str | None = None) -> ScreenshotContent:
+        del version_id
         path = self._resolve(key)
         data = path.read_bytes()
         _, content_type = image_type(data)
@@ -134,7 +135,8 @@ class LocalScreenshotStorage:
         os.replace(temporary, destination)
         return StoredScreenshot(key)
 
-    def read_blob(self, key: str) -> bytes:
+    def read_blob(self, key: str, version_id: str | None = None) -> bytes:
+        del version_id
         return self._resolve(key).read_bytes()
 
 
@@ -142,6 +144,7 @@ class S3ScreenshotStorage:
     def __init__(self, settings: Settings):
         try:
             import boto3
+            from botocore.exceptions import ClientError
         except ImportError as exc:
             raise RuntimeError(
                 'Install S3 support with: pip install -e ".[s3]"'
@@ -149,6 +152,7 @@ class S3ScreenshotStorage:
         self.bucket = settings.s3_bucket
         self.sse = settings.s3_sse
         self.kms_key_id = settings.s3_kms_key_id
+        self.client_error = ClientError
         self.client = boto3.client(
             "s3",
             region_name=settings.s3_region or None,
@@ -174,8 +178,21 @@ class S3ScreenshotStorage:
         response = self.client.put_object(**arguments)
         return StoredScreenshot(key, response.get("VersionId"))
 
-    def read(self, key: str) -> ScreenshotContent:
-        response = self.client.get_object(Bucket=self.bucket, Key=key)
+    def read(self, key: str, version_id: str | None = None) -> ScreenshotContent:
+        arguments = {"Bucket": self.bucket, "Key": key}
+        if version_id:
+            arguments["VersionId"] = version_id
+        try:
+            response = self.client.get_object(**arguments)
+        except self.client_error as exc:
+            code = str(exc.response.get("Error", {}).get("Code", ""))
+            status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+            if (
+                code in {"NoSuchKey", "NoSuchVersion", "404", "NotFound"}
+                or status == 404
+            ):
+                raise FileNotFoundError(key) from exc
+            raise
         return ScreenshotContent(
             response["Body"].read(),
             response.get("ContentType") or "application/octet-stream",
@@ -204,8 +221,11 @@ class S3ScreenshotStorage:
         response = self.client.put_object(**arguments)
         return StoredScreenshot(key, response.get("VersionId"))
 
-    def read_blob(self, key: str) -> bytes:
-        response = self.client.get_object(Bucket=self.bucket, Key=key)
+    def read_blob(self, key: str, version_id: str | None = None) -> bytes:
+        arguments = {"Bucket": self.bucket, "Key": key}
+        if version_id:
+            arguments["VersionId"] = version_id
+        response = self.client.get_object(**arguments)
         return response["Body"].read()
 
 

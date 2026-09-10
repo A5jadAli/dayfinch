@@ -1,18 +1,55 @@
 {% extends "base.html" %}
 {% block title %}Enrollment token · Dayfinch{% endblock %}
 {% block content %}
-<section class="mx-auto max-w-xl">
+<section class="mx-auto max-w-2xl">
   <div class="card card-body">
     <p class="eyebrow">One-time credential</p>
     <h1 class="page-title mt-2">{{ device.name }}</h1>
-    <p class="muted mt-1">Copy this token now. Only its hash is stored, so it cannot be shown again.</p>
-    <pre class="mt-5 overflow-x-auto rounded-md border border-line bg-surface-2 px-4 py-3 font-mono text-sm break-all whitespace-pre-wrap text-ink">{{ raw_token }}</pre>
+    <p class="muted mt-1">Save the ready-to-use configuration now. Only the token hash is stored, so this page cannot be recovered later.</p>
+    {% if tracker_kind == 'desktop' %}
+    <textarea id="agentConfig" class="input mt-5 min-h-36 resize-y font-mono text-xs" readonly aria-label="Desktop tracker configuration">{{ agent_config }}</textarea>
+    <div class="mt-3 flex flex-wrap gap-2">
+      <button class="btn btn-primary" type="button" data-download-target="agentConfig" data-filename="agent.toml"><svg class="icon icon-sm"><use href="#i-download"></use></svg> Download agent.toml</button>
+      <button class="btn btn-secondary" type="button" data-copy-target="agentConfig">Copy configuration</button>
+    </div>
     <p class="notice mt-4">
       Treat this token like a password. It enrolls this device under {{ current_user.email }} and must only be
-      placed in that device's local agent configuration.
+      saved as <code>agent.toml</code> on that computer. It includes separate device and local browser-bridge secrets; do not send it by email or chat.
     </p>
-    <div class="mt-6">
-      <a class="btn btn-primary" href="/">Done</a>
+    {% if agent_downloads %}
+    <div class="mt-6 rounded-xl border border-brand-line bg-brand-tint p-4">
+      <h2 class="section-title">Install the employee tracker</h2>
+      <p class="muted mt-1 text-sm">Download the tracker for this computer. On first launch, choose the downloaded <code>agent.toml</code>; Dayfinch validates it and installs it into a private per-user configuration directory.</p>
+      <div class="mt-3 flex flex-wrap gap-2">
+        {% for platform, url in agent_downloads %}{% if url %}<a class="btn btn-primary" href="{{ url }}" rel="noopener noreferrer"><svg class="icon icon-sm"><use href="#i-download"></use></svg> Download for {{ platform }}</a>{% endif %}{% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    <div class="mt-6 rounded-xl border border-line bg-surface-2 p-4">
+      <h2 class="section-title">{% if agent_downloads %}Developer installation{% else %}Run the tracker from this repository{% endif %}</h2>
+      <ol class="mt-3 list-decimal space-y-2 pl-5 text-sm text-muted">
+        <li>Save the downloaded file in the Dayfinch repository root.</li>
+        <li>Install once: <code>python -m pip install -e ".[agent]"</code></li>
+        <li>Start: <code>dayfinch-agent --config ./agent.toml</code></li>
+        <li>Select the project, start the visible timer, and approve any operating-system capture permissions.</li>
+      </ol>
+    </div>
+    {% else %}
+    <div class="mt-6 rounded-xl border border-line bg-surface-2 p-4">
+      <h2 class="section-title">Connect the iOS or Android tracker</h2>
+      <p class="muted mt-1 text-sm">Use a production or development build of Dayfinch Tracker. For mobile security, the server URL must be public HTTPS; a phone cannot use this computer's <code>127.0.0.1</code> address.</p>
+      <textarea id="mobileEnrollment" class="input mt-3 min-h-36 resize-y font-mono text-xs" readonly aria-label="Mobile tracker enrollment JSON">{{ mobile_enrollment }}</textarea>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button class="btn btn-primary" type="button" data-copy-target="mobileEnrollment">Copy mobile enrollment JSON</button>
+        <button class="btn btn-secondary" type="button" data-download-target="mobileEnrollment" data-filename="dayfinch-mobile-enrollment.json"><svg class="icon icon-sm"><use href="#i-download"></use></svg> Download JSON</button>
+      </div>
+      <p class="muted mt-3 text-xs">Paste it into the mobile app once. The token is stored in the OS keychain/keystore and the offline event queue is encrypted. Mobile tracks time and explicitly consented work-session GPS; screenshots and keyboard/mouse activity remain desktop-only because mobile operating systems block cross-app capture.</p>
+    </div>
+    <p class="notice mt-4">Treat this token like a password. It is locked to the native mobile tracker under {{ current_user.email }}; do not send it by email or chat.</p>
+    {% endif %}
+    <div class="mt-6 flex gap-2">
+      <a class="btn btn-primary" href="/projects/{{ device.project_id }}">Return to project</a>
+      <a class="btn btn-secondary" href="/devices/{{ device.id }}">View device</a>
     </div>
   </div>
 </section>

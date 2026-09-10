@@ -64,7 +64,14 @@
         </button>
       </form>
 
-      <p class="reveal mt-6 text-center text-xs text-faint" style="--i:3">Access is invitation-only. Contact your workspace owner.</p>
+      {% if sso_enabled %}
+      <div class="reveal mt-5" style="--i:3">
+        <div class="mb-4 flex items-center gap-3 text-xs text-faint"><span class="h-px flex-1 bg-line"></span>or<span class="h-px flex-1 bg-line"></span></div>
+        <a class="btn btn-secondary w-full py-2.5" href="{{ sso_url }}"><svg class="icon icon-sm"><use href="#i-shield"></use></svg> {{ sso_label }}</a>
+      </div>
+      {% endif %}
+
+      <p class="reveal mt-6 text-center text-xs text-faint" style="--i:4">Access is invitation-only. Contact your workspace owner.</p>
     </div>
   </section>
 </div>

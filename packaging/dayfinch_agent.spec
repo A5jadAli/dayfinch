@@ -2,6 +2,7 @@
 
 import importlib.util
 import sys
+from pathlib import Path
 
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -21,6 +22,16 @@ else:
     )
 if importlib.util.find_spec("dbus_next") is not None:
     hidden_imports.extend(collect_submodules("dbus_next"))
+
+icon = None
+if sys.platform == "win32":
+    candidate = Path("build/icons/dayfinch-agent.ico")
+    if candidate.is_file():
+        icon = str(candidate)
+elif sys.platform == "darwin":
+    candidate = Path("build/icons/dayfinch-agent.icns")
+    if candidate.is_file():
+        icon = str(candidate)
 
 a = Analysis(
     ["agent_entry.py"],
@@ -54,4 +65,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=icon,
 )

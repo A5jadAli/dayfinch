@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from fastapi.testclient import TestClient
 
 from api.config import Settings
@@ -26,7 +28,16 @@ def _enrolled_device(database):
     admin = database.get_user_by_email("admin@example.test")
     _, invite = database.create_invitation("member@example.test", admin["id"], 24)
     member = database.accept_invitation(invite, hash_password("member password long"))
-    _, token = database.create_device("Laptop", member["id"])
+    project = database.create_project("Capture project", "", admin["id"])
+    database.add_project_member(project["id"], member["id"])
+    device, token = database.create_device("Laptop", member["id"], project["id"])
+    database.sync_work_session(
+        device,
+        "active",
+        None,
+        project["id"],
+        observed_at=datetime(2026, 7, 27, 10, 0, tzinfo=UTC),
+    )
     return token
 
 
@@ -115,3 +126,38 @@ def test_server_rejects_capture_when_screenshot_policy_is_disabled(
         assert response.status_code == 403
         assert database.get_record(rid) is None
         assert not list(tmp_path.rglob("*.jpg"))
+
+
+def test_server_rejects_unblurred_capture_when_member_policy_requires_blur(
+    tmp_path, postgres_url
+):
+    app = create_app(_settings(tmp_path, postgres_url))
+    with TestClient(app) as client:
+        database = app.state.database
+        token = _enrolled_device(database)
+        device = database.authenticate_device(token)
+        admin = database.get_user_by_email("admin@example.test")
+        database.update_member_tracking_settings(
+            device["owner_user_id"],
+            {
+                "screenshot_frequency": None,
+                "screenshot_blur": True,
+                "track_apps": None,
+                "track_urls": None,
+                "idle_timeout_minutes": None,
+                "allow_screenshot_delete": None,
+            },
+            admin["id"],
+        )
+        rejected_id = "6f9619ff-8b86-d011-b42d-00cf4fc964cc"
+
+        rejected = _post_activity(client, token, rejected_id)
+        assert rejected.status_code == 403
+        assert rejected.json()["detail"] == "Screenshot blur is required by policy"
+        assert database.get_record(rejected_id) is None
+        assert not list(tmp_path.rglob("*.jpg"))
+
+        accepted_id = "6f9619ff-8b86-d011-b42d-00cf4fc964dd"
+        accepted = _post_activity(client, token, accepted_id, screenshot_blurred="true")
+        assert accepted.status_code == 201
+        assert database.get_record(accepted_id)["screenshot_blurred"] is True

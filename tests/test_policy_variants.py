@@ -97,6 +97,55 @@ def test_queued_capture_is_discarded_if_server_now_disables_screenshots(tmp_path
     assert agent._screenshots_enabled is False
 
 
+def test_old_offline_capture_is_blurred_before_upload_under_new_policy(
+    tmp_path, monkeypatch
+):
+    agent = _agent(tmp_path, {})
+    record = agent.queue.add(b"old-clear-image", ActivitySnapshot(0, 0, 0), "Editor")
+    uploaded = []
+
+    class UploadClient:
+        @staticmethod
+        def upload(item, screenshot):
+            uploaded.append((item, screenshot))
+
+    agent.client = UploadClient()
+    agent._screenshot_blur = True
+    monkeypatch.setattr(
+        "agent.main.blur_screenshot", lambda image, _quality: b"blurred"
+    )
+
+    assert agent._upload_one() is True
+    assert agent.queue.count() == 0
+    assert uploaded[0][0].id == record.id
+    assert uploaded[0][0].screenshot_blurred is True
+    assert uploaded[0][1] == b"blurred"
+
+
+def test_server_blur_rejection_updates_policy_and_retries_locally(tmp_path):
+    agent = _agent(tmp_path, {})
+    agent.queue.add(b"old-clear-image", ActivitySnapshot(0, 0, 0), "Editor")
+
+    class RequiresBlurClient:
+        @staticmethod
+        def upload(_record, _screenshot):
+            request = httpx.Request("POST", "http://server/api/v1/activity")
+            response = httpx.Response(
+                403,
+                request=request,
+                json={"detail": "Screenshot blur is required by policy"},
+            )
+            raise httpx.HTTPStatusError(
+                "blur required", request=request, response=response
+            )
+
+    agent.client = RequiresBlurClient()
+    assert agent._upload_one() is False
+    assert agent.queue.count() == 1
+    assert agent._screenshot_blur is True
+    assert "applying required screenshot blur" in agent.status
+
+
 def test_corrupt_offline_capture_is_quarantined_without_blocking_queue(tmp_path):
     agent = _agent(tmp_path, {})
     record = agent.queue.add(

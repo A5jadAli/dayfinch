@@ -140,8 +140,17 @@
           body
         });
         if (!response.ok) {
-          if ([400, 404, 409, 410, 413, 415, 422].includes(response.status)) {
-            await quarantine(row, response.status);
+          let policyRejection = false;
+          if (response.status === 403) {
+            try {
+              const problem = await response.clone().json();
+              policyRejection = problem.detail === 'Desktop tracking is required by policy';
+            } catch (_error) {
+              policyRejection = false;
+            }
+          }
+          if (policyRejection || [400, 404, 409, 410, 413, 415, 422].includes(response.status)) {
+            await quarantine(row, response.status, policyRejection ? 'tracking-app-disabled' : 'server-rejected');
             continue;
           }
           throw new Error(`server returned ${response.status}`);

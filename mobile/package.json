@@ -1,0 +1,38 @@
+{
+  "name": "dayfinch-mobile",
+  "version": "0.6.0",
+  "private": true,
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start --dev-client",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "doctor": "expo-doctor"
+  },
+  "dependencies": {
+    "expo": "~57.0.9",
+    "expo-crypto": "~57.0.2",
+    "expo-dev-client": "~57.0.18",
+    "expo-device": "~57.0.1",
+    "expo-location": "~57.0.16",
+    "expo-network": "~57.0.1",
+    "expo-notifications": "~57.0.17",
+    "expo-secure-store": "~57.0.3",
+    "expo-sqlite": "~57.0.2",
+    "expo-system-ui": "~57.0.3",
+    "expo-task-manager": "~57.0.16",
+    "react": "19.2.3",
+    "react-native": "0.86.3"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "expo-doctor": "^1.20.4",
+    "typescript": "~6.0.3",
+    "vitest": "^4.0.0"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}

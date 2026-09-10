@@ -1,9 +1,27 @@
-from typing import Annotated
+import json
+import secrets
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Form, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 router = APIRouter(tags=["devices"])
+
+
+@router.get("/devices", response_class=HTMLResponse)
+def device_inventory(request: Request):
+    web = request.app.state.web
+    redirect = web.user_or_login(request)
+    if redirect:
+        return redirect
+    web.require_it_manager(request)
+    return request.app.state.templates.TemplateResponse(
+        request=request,
+        name="devices.html",
+        context=web.page_context(
+            request, devices=request.app.state.database.list_devices()
+        ),
+    )
 
 
 @router.post("/devices", response_class=HTMLResponse)
@@ -12,28 +30,78 @@ def enroll_device(
     name: Annotated[str, Form(min_length=1, max_length=100)],
     project_id: Annotated[str, Form()],
     csrf: Annotated[str, Form()],
+    tracker_kind: Annotated[Literal["desktop", "mobile"], Form()] = "desktop",
 ):
     web = request.app.state.web
     database = request.app.state.database
-    user = web.require_user(request)
+    user = web.require_worker(request)
     web.require_csrf(request, csrf)
     project = database.get_project(project_id)
     if (
         not project
         or not project["enabled"]
-        or not web.can_access_project(user, project_id)
+        or not web.can_track_project(user, project_id)
     ):
         raise HTTPException(
             status_code=403, detail="Choose a project assigned to your account"
         )
-    device, raw_token = database.create_device(name, user["id"], project_id)
+    device, raw_token = database.create_device(
+        name, user["id"], project_id, tracker_kind=tracker_kind
+    )
     database.add_audit_event(
         user["id"], "device.enrolled", "device", device["id"], device["name"]
     )
+    settings = request.app.state.settings
+    mobile_enrollment = json.dumps(
+        {
+            "server_url": settings.public_url,
+            "device_token": raw_token,
+            "project_id": project_id,
+        },
+        indent=2,
+    )
+    agent_config_lines = [
+        f"server_url = {json.dumps(settings.public_url)}",
+        f"device_token = {json.dumps(raw_token)}",
+        "consent_confirmed = true",
+        f"project_id = {json.dumps(project_id)}",
+        'task_id = ""',
+        f"website_bridge_token = {json.dumps(secrets.token_urlsafe(32))}",
+        "website_bridge_port = 8765",
+    ]
+    if settings.agent_update_manifest_url and settings.agent_update_public_key:
+        agent_config_lines.extend(
+            (
+                "",
+                f"update_manifest_url = {json.dumps(settings.agent_update_manifest_url)}",
+                f"update_public_key = {json.dumps(settings.agent_update_public_key)}",
+                'update_mode = "notify"',
+            )
+        )
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="enrollment.html",
-        context=web.page_context(request, device=device, raw_token=raw_token),
+        context=web.page_context(
+            request,
+            device=device,
+            raw_token=raw_token,
+            agent_config="\n".join(agent_config_lines),
+            mobile_enrollment=mobile_enrollment,
+            tracker_kind=tracker_kind,
+            agent_downloads=[
+                ("Windows", settings.agent_windows_url),
+                ("macOS", settings.agent_macos_url),
+                ("Linux", settings.agent_linux_url),
+            ]
+            if any(
+                (
+                    settings.agent_windows_url,
+                    settings.agent_macos_url,
+                    settings.agent_linux_url,
+                )
+            )
+            else [],
+        ),
     )
 
 
@@ -48,11 +116,23 @@ def device_timeline(request: Request, device_id: str):
     device = database.get_device(device_id)
     if not device or not web.can_access_device(user, device):
         raise HTTPException(status_code=404, detail="Device not found")
+    policy = database.effective_tracking_settings(device.get("owner_user_id"))
+    can_view_activity = web.can_view_device_activity(user, device)
     return request.app.state.templates.TemplateResponse(
         request=request,
         name="device.html",
         context=web.page_context(
-            request, device=device, records=database.list_records(device_id)
+            request,
+            device=device,
+            records=database.list_records(device_id) if can_view_activity else [],
+            can_view_activity=can_view_activity,
+            can_manage_device=web.can_manage_device(user, device),
+            can_delete_activity=user["role"] in {"admin", "manager"}
+            or (
+                user["role"] == "member"
+                and device.get("owner_user_id") == user["id"]
+                and policy["allow_screenshot_delete"]
+            ),
         ),
     )
 
@@ -69,7 +149,7 @@ def change_device_state(
     user = web.require_user(request)
     web.require_csrf(request, csrf)
     device = database.get_device(device_id)
-    if not device or not web.can_access_device(user, device):
+    if not device or not web.can_manage_device(user, device):
         raise HTTPException(status_code=404, detail="Device not found")
     database.set_device_enabled(device_id, bool(enabled))
     database.add_audit_event(
@@ -92,7 +172,9 @@ def screenshot(request: Request, record_id: str) -> Response:
     if not record or not web.can_access_record(user, record):
         raise HTTPException(status_code=404, detail="Screenshot not found")
     try:
-        content = request.app.state.storage.read(record["screenshot_path"])
+        content = request.app.state.storage.read(
+            record["screenshot_path"], record.get("storage_version_id")
+        )
     except (FileNotFoundError, ValueError) as exc:
         raise HTTPException(status_code=404, detail="Screenshot file missing") from exc
     database.add_audit_event(
@@ -118,15 +200,21 @@ def delete_screenshot(
     database = request.app.state.database
     user = web.require_user(request)
     web.require_csrf(request, csrf)
-    policy = database.organization_settings()
-    if (
-        user["role"] not in {"admin", "manager"}
-        and not policy["allow_screenshot_delete"]
-    ):
-        raise HTTPException(status_code=403, detail="Screenshot deletion is disabled")
+    if user["role"] == "viewer":
+        raise HTTPException(
+            status_code=403, detail="Read-only viewers cannot delete activity"
+        )
     record = database.get_record(record_id)
     if not record or not web.can_access_record(user, record):
         raise HTTPException(status_code=404, detail="Screenshot not found")
+    policy = database.effective_tracking_settings(record.get("owner_user_id"))
+    can_delete = user["role"] in {"admin", "manager"} or (
+        user["role"] == "member"
+        and record.get("owner_user_id") == user["id"]
+        and policy["allow_screenshot_delete"]
+    )
+    if not can_delete:
+        raise HTTPException(status_code=403, detail="Screenshot deletion is disabled")
     request.app.state.storage.delete(
         record["screenshot_path"], record.get("storage_version_id")
     )
