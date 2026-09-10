@@ -102,13 +102,15 @@ queue is empty without losing project/task attribution.
 Create a disposable workspace and one enrolled device token per intended concurrent
 worker. Run `dayfinch-load-test` for at least 30 minutes at expected peak, then at
 2× peak. It creates real sessions and screenshot objects; never point it at employee
-production data. Capture its JSON report alongside per-replica Dayfinch metrics,
-CPU/RSS, PostgreSQL connections/locks/slow queries, database IOPS/storage, S3
-latency/errors, and reverse-proxy saturation.
+production data. Provide `--web-email` and `TRACKER_LOAD_TEST_PASSWORD` so the same
+run repeatedly reads the dashboard, timesheet, and reports pages. Capture its JSON
+report alongside per-replica Dayfinch metrics, CPU/RSS, PostgreSQL
+connections/locks/slow queries, database IOPS/storage, S3 latency/errors, and
+reverse-proxy saturation.
 
 Set release thresholds before running (request error rate, p95/p99 latency, queue or
 pool wait, CPU/memory headroom) and record the largest passing device count. Repeat
-with dashboard/report reads, retention and scheduled reports active, then repeat an
+with the web reads, retention, and scheduled reports active, then repeat an
 S3 latency/503 and PostgreSQL failover scenario. Verify every harness worker sends a
 final stopped heartbeat and that retention removes its synthetic captures.
 

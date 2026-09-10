@@ -203,20 +203,24 @@ aggregation belong in the deployment platform and remain a production release ga
 ## Capacity harness
 
 `dayfinch-load-test` exercises the real authenticated heartbeat, work-session, image
-upload, storage, and activity-row paths. Use only a disposable workspace because it
-creates genuine sessions and screenshots. Put one enrolled device token per line in
-an ignored file, then run:
+upload, storage, activity-row, dashboard, timesheet, and report-read paths. Use only
+a disposable workspace because it creates genuine sessions and screenshots. Put
+one enrolled device token per line in an ignored file, set a disposable web-reader
+password without putting it on the command line, then run:
 
 ```bash
+export TRACKER_LOAD_TEST_PASSWORD='disposable-account-password'
 dayfinch-load-test --base-url http://127.0.0.1:8000 \
   --tokens-file runtime/load-device-tokens --duration 300 \
-  --heartbeat-interval 5 --capture-interval 15
+  --heartbeat-interval 15 --capture-interval 15 \
+  --web-email load-reader@example.test --read-interval 1
 ```
 
 One token represents one concurrent desktop device. Remote targets require HTTPS
 and `--acknowledge-production-impact`. Tokens are never printed; the JSON result
 contains request rate, status counts, error percentage, and p50/p95/p99/max latency.
-Pair it with PostgreSQL, S3, CPU/memory, and `/metrics` monitoring.
+Omit `--web-email` only for an ingestion-only comparison. Pair the JSON with
+PostgreSQL, S3, CPU/memory, and `/metrics` monitoring.
 
 ## Dashboard styles
 

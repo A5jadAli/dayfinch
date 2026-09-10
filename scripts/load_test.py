@@ -4,6 +4,8 @@ import argparse
 import asyncio
 import json
 import math
+import os
+import re
 import time
 import uuid
 from collections import Counter, defaultdict
@@ -106,11 +108,17 @@ async def _request(
     json_body: dict[str, object] | None = None,
     data: dict[str, object] | None = None,
     files: dict[str, tuple[str, bytes, str]] | None = None,
+    method: str = "POST",
 ) -> httpx.Response | None:
     started = time.perf_counter()
     try:
-        response = await client.post(
-            endpoint, headers=headers, json=json_body, data=data, files=files
+        response = await client.request(
+            method,
+            endpoint,
+            headers=headers,
+            json=json_body,
+            data=data,
+            files=files,
         )
     except httpx.HTTPError:
         measurements.record(endpoint, time.perf_counter() - started, None)
@@ -151,7 +159,7 @@ async def worker(
                         "task_id": task_id or None,
                         "event_id": str(uuid.uuid4()),
                         "observed_at": observed_at,
-                        "heartbeat_interval_seconds": max(1, round(heartbeat_interval)),
+                        "heartbeat_interval_seconds": max(15, round(heartbeat_interval)),
                     },
                 )
                 if response is not None and response.is_success:
@@ -194,9 +202,56 @@ async def worker(
                 "task_id": task_id or None,
                 "event_id": str(uuid.uuid4()),
                 "observed_at": datetime.now(UTC).isoformat(),
-                "heartbeat_interval_seconds": max(1, round(heartbeat_interval)),
+                "heartbeat_interval_seconds": max(15, round(heartbeat_interval)),
             },
         )
+
+
+async def _login_web_reader(
+    client: httpx.AsyncClient, email: str, password: str
+) -> None:
+    try:
+        login_page = await client.get("/login")
+        login_page.raise_for_status()
+    except httpx.HTTPError as exc:
+        raise LoadTestError("The web-reader login page is unavailable") from exc
+    match = re.search(r'name="csrf" value="([^"]+)"', login_page.text)
+    if not match:
+        raise LoadTestError("The login page did not contain a CSRF token")
+    try:
+        response = await client.post(
+            "/login",
+            data={"email": email, "password": password, "csrf": match.group(1)},
+            follow_redirects=False,
+        )
+    except httpx.HTTPError as exc:
+        raise LoadTestError("Web-reader authentication could not be sent") from exc
+    if response.status_code != 303:
+        raise LoadTestError(
+            f"Web-reader authentication failed with HTTP {response.status_code}"
+        )
+
+
+async def web_reader(
+    client: httpx.AsyncClient,
+    measurements: Measurements,
+    *,
+    stop_at: float,
+    read_interval: float,
+) -> None:
+    endpoints = ("/", "/timesheets", "/reports")
+    while time.monotonic() < stop_at:
+        for endpoint in endpoints:
+            if time.monotonic() >= stop_at:
+                return
+            await _request(
+                client,
+                measurements,
+                endpoint,
+                headers={},
+                method="GET",
+            )
+        await asyncio.sleep(min(read_interval, max(0, stop_at - time.monotonic())))
 
 
 async def run(arguments: argparse.Namespace) -> dict[str, object]:
@@ -214,8 +269,8 @@ async def run(arguments: argparse.Namespace) -> dict[str, object]:
     async with httpx.AsyncClient(
         base_url=base_url, timeout=timeout, limits=limits
     ) as client:
-        await asyncio.gather(
-            *(
+        def device_workers():
+            return [
                 worker(
                     client,
                     token,
@@ -227,31 +282,75 @@ async def run(arguments: argparse.Namespace) -> dict[str, object]:
                     task_id=arguments.task_id,
                 )
                 for token in tokens
+            ]
+
+        if arguments.web_email:
+            password = os.getenv(arguments.web_password_env, "")
+            if not password:
+                raise LoadTestError(
+                    f"{arguments.web_password_env} must contain the web-reader password"
+                )
+            web_client = httpx.AsyncClient(
+                base_url=base_url,
+                timeout=timeout,
+                limits=httpx.Limits(max_connections=3, max_keepalive_connections=3),
             )
-        )
+            try:
+                await _login_web_reader(web_client, arguments.web_email, password)
+                tasks = device_workers()
+                tasks.append(
+                    web_reader(
+                        web_client,
+                        measurements,
+                        stop_at=stop_at,
+                        read_interval=arguments.read_interval,
+                    )
+                )
+                await asyncio.gather(*tasks)
+            finally:
+                await web_client.aclose()
+        else:
+            await asyncio.gather(*device_workers())
     return measurements.report(time.monotonic() - started, len(tokens))
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(
         prog="dayfinch-load-test",
-        description="Drive real Dayfinch heartbeat and screenshot ingestion paths",
+        description="Drive Dayfinch ingestion and authenticated web read paths",
     )
     result.add_argument("--base-url", default="http://127.0.0.1:8000")
     result.add_argument("--tokens-file", type=Path, required=True)
     result.add_argument("--duration", type=float, default=60)
-    result.add_argument("--heartbeat-interval", type=float, default=5)
+    result.add_argument("--heartbeat-interval", type=float, default=15)
     result.add_argument("--capture-interval", type=float, default=15)
     result.add_argument("--timeout", type=float, default=15)
     result.add_argument("--project-id", default="")
     result.add_argument("--task-id", default="")
+    result.add_argument(
+        "--web-email",
+        default="",
+        help="Account used for dashboard, timesheet, and report reads",
+    )
+    result.add_argument(
+        "--web-password-env",
+        default="TRACKER_LOAD_TEST_PASSWORD",
+        help="Environment variable holding the web-reader password",
+    )
+    result.add_argument("--read-interval", type=float, default=1)
     result.add_argument("--acknowledge-production-impact", action="store_true")
     return result
 
 
 def main() -> None:
     arguments = parser().parse_args()
-    for label in ("duration", "heartbeat_interval", "capture_interval", "timeout"):
+    for label in (
+        "duration",
+        "heartbeat_interval",
+        "capture_interval",
+        "timeout",
+        "read_interval",
+    ):
         if getattr(arguments, label) <= 0:
             raise SystemExit(f"--{label.replace('_', '-')} must be positive")
     try:
