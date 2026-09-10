@@ -5,9 +5,12 @@
   "scripts": {
     "build:css": "tailwindcss -i ui/tailwind.css -o ui/static/app.css --minify",
     "watch:css": "tailwindcss -i ui/tailwind.css -o ui/static/app.css --watch",
-    "audit:ui": "node scripts/visual-audit.mjs"
+    "audit:ui": "node scripts/visual-audit.mjs",
+    "test:browser": "playwright test"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/cli": "^4.1.14",
     "tailwindcss": "^4.1.14"
   }

@@ -97,6 +97,33 @@
     });
   }
 
+  /* --- Keyboard-accessible tables -------------------------------------- */
+  /* Wide tables scroll within their card on small screens. Make only those
+     active scroll regions keyboard-focusable, and name them from the nearest
+     section heading so Safari and keyboard-only users can reach the content. */
+  document.querySelectorAll(".table-wrap").forEach((region) => {
+    const syncTableRegion = () => {
+      const scrollable = region.scrollWidth > region.clientWidth + 1;
+      if (scrollable) {
+        region.tabIndex = 0;
+        region.setAttribute("role", "region");
+        const heading = region.closest("section")?.querySelector("h2, h1");
+        region.setAttribute(
+          "aria-label",
+          `${heading?.textContent.trim() || "Data"} table`,
+        );
+        region.dataset.scrollAccess = "true";
+      } else if (region.dataset.scrollAccess) {
+        region.removeAttribute("tabindex");
+        region.removeAttribute("role");
+        region.removeAttribute("aria-label");
+        delete region.dataset.scrollAccess;
+      }
+    };
+    syncTableRegion();
+    new ResizeObserver(syncTableRegion).observe(region);
+  });
+
   /* --- Entrance sequencing ---------------------------------------------- */
   /* Number the top-level blocks of the page so `.reveal` staggers them at 95ms
      apart rather than animating everything on the same frame. Anything past the

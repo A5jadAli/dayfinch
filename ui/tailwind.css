@@ -25,15 +25,16 @@
   --p-line-soft: #eeeef3;
   --p-ink: #0c0e14;
   --p-ink-2: #3a3e4a;
-  --p-muted: #696e7d;
-  --p-faint: #9aa0ae;
+  --p-muted: #606674;
+  /* Faint text remains secondary while meeting WCAG AA on every light surface. */
+  --p-faint: #606674;
 
   --p-brand: #6857e5;
   --p-brand-ink: #5241c4;
   --p-brand-tint: #f1efff;
   --p-brand-line: #ded8ff;
 
-  --p-ok: #059669;
+  --p-ok: #047857;
   --p-ok-tint: #e7f7f0;
   --p-warn: #b45309;
   --p-warn-tint: #fdf3e3;
@@ -46,7 +47,8 @@
      what gives the app its spine. */
   --p-rail: #101116;
   --p-rail-ink: #f4f4f7;
-  --p-rail-muted: #8b8d9c;
+  /* Some labels intentionally apply 70% opacity, so the source must stay bright. */
+  --p-rail-muted: #b0b2bd;
   --p-rail-line: rgba(255, 255, 255, 0.07);
   --p-rail-hover: rgba(255, 255, 255, 0.06);
 
@@ -67,7 +69,7 @@
   --p-ink: #f4f4f7;
   --p-ink-2: #cfcfd8;
   --p-muted: #9698a6;
-  --p-faint: #6b6d7c;
+  --p-faint: #9698a6;
 
   --p-brand: #8b7cf6;
   --p-brand-ink: #a99bff;

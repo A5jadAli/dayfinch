@@ -28,6 +28,13 @@ route, UI, environment option, migration, repository method, or service remains.
 - Full suite against a newly created PostgreSQL database with no prior migrations:
   **385 passed in 209.21 seconds**.
 - `git diff --check` — passed.
+- Playwright acceptance matrix in Chromium, Firefox, and WebKit at 1440px and
+  390px: **42 passed**. Axe reported no moderate or minor advisory violations.
+
+## WI-9 accessibility advisory register
+
+- **Moderate:** none observed in the 42-case Playwright matrix on 2026-09-10.
+- **Minor:** none observed in the 42-case Playwright matrix on 2026-09-10.
 
 ## Verified status of the nine reported items
 
@@ -184,3 +191,4 @@ in `docs/testing-playbook.md`; the authoritative remaining release register is
 - 2026-09-10 — WI-6 — DONE — The automated local drill verified explicit SMTP failure with a retained invitation link, encrypted screenshot and heartbeat replay after MinIO/PostgreSQL/server outages, PostgreSQL readiness 503, and post-recovery admin visibility.
 - 2026-09-10 — WI-7 — DONE — An isolated local backup/wipe/restore matched exact inventories for 69 tables, 1,860 rows, and 802 referenced MinIO objects; an opt-in destination plus daily systemd scheduling example is included.
 - 2026-09-10 — WI-8 — DONE — Vendor-neutral Prometheus rules and a Grafana dashboard cover readiness, HTTP errors/mean latency, background-job failures, durable queue depths, and screenshot ingest failures, with promtool and JSON validation.
+- 2026-09-10 — WI-9 — DONE — One pinned Playwright run passed all 42 login, dashboard, project-enrollment, timesheet, report, screenshot, and settings checks across Chromium, Firefox, and WebKit at desktop/mobile widths, with no axe advisories or layout overflow.

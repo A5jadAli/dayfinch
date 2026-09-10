@@ -13,6 +13,8 @@ runtime/
 agent.toml
 node_modules/
 .visual-audit/
+playwright-report/
+test-results/
 mobile/.expo/
 mobile/android/
 mobile/ios/

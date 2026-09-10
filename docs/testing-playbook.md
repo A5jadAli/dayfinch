@@ -85,6 +85,39 @@ DAYFINCH_AUDIT_PASSWORD='your local admin password' \
 npm run audit:ui
 ```
 
+The Playwright browser acceptance suite covers login, dashboard and project
+enrollment, timesheets, reports, screenshots, and settings in Chromium, Firefox,
+and WebKit at 1440px and 390px widths. It fails on critical/serious axe findings or
+horizontal page overflow and reports moderate/minor findings as `AXE_ADVISORY`
+lines. It creates uniquely named projects and desktop enrollment credentials in a
+disposable local workspace; it never starts a tracker or captures a screen.
+
+Install the pinned Node dependencies and Playwright-managed browsers once, then run
+the suite against a healthy local stack:
+
+```bash
+npm ci
+npx playwright install --with-deps chromium firefox webkit
+set -a; . .env; set +a
+DAYFINCH_BROWSER_EMAIL="${TRACKER_ADMIN_EMAIL:-admin@example.local}" \
+DAYFINCH_BROWSER_PASSWORD="$TRACKER_ADMIN_PASSWORD" \
+npm run test:browser
+```
+
+Use `DAYFINCH_BROWSER_URL` when the local server is not at
+`http://127.0.0.1:8000`. Browser downloads and the test itself are an explicit
+developer/CI step and are not included in the production image.
+
+On Linux, the pinned official Playwright image runs all three engines without
+installing browser libraries on the host (run `npm ci` first):
+
+```bash
+docker run --rm --network host --ipc host \
+  --user "$(id -u):$(id -g)" --env-file .env -e HOME=/tmp \
+  -v "$PWD:/work" -w /work mcr.microsoft.com/playwright:v1.63.0-noble \
+  bash -c 'export DAYFINCH_BROWSER_EMAIL="${TRACKER_ADMIN_EMAIL:-admin@example.local}" DAYFINCH_BROWSER_PASSWORD="$TRACKER_ADMIN_PASSWORD"; npm run test:browser'
+```
+
 The suite covers a route-wide browser authentication/CSRF inventory, organization,
 project, team-lead and Manage-IT isolation, two-factor throttling, access-loss session
 closure, time-state transitions, offline replay idempotency, restart gaps, idle deduction, queue bounds
