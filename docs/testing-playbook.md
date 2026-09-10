@@ -114,6 +114,14 @@ with the web reads, retention, and scheduled reports active, then repeat an
 S3 latency/503 and PostgreSQL failover scenario. Verify every harness worker sends a
 final stopped heartbeat and that retention removes its synthetic captures.
 
+### Local failure drills
+
+The loopback-only runner in `scripts/local_failure_drills.py` automates Mailpit,
+MinIO, PostgreSQL, and server outage/recovery checks against the opt-in local stack.
+It stops local Compose services, so read `docs/failure-drills.md` and pass its
+explicit disruption acknowledgement. The document records the accepted local run,
+expected results, and observed recovery timings.
+
 ## A/B resilience comparisons
 
 These are controlled behavior comparisons, not marketing experiments. Each pair
