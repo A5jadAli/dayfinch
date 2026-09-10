@@ -25,8 +25,8 @@ route, UI, environment option, migration, repository method, or service remains.
 - `.venv/bin/python -m compileall -q api agent tests` — passed.
 - `npm run build:css` — passed.
 - `.venv/bin/python -m pip wheel . --no-deps --no-build-isolation -w /tmp/dayfinch-wheel-check` — built `dayfinch-0.6.0`.
-- Full suite against a newly created PostgreSQL database with no prior migrations:
-  **385 passed in 209.21 seconds**.
+- Full PostgreSQL-backed suite after WI-10: **405 passed, 1 opt-in local E2E
+  skipped**.
 - `git diff --check` — passed.
 - Playwright acceptance matrix in Chromium, Firefox, and WebKit at 1440px and
   390px: **42 passed**. Axe reported no moderate or minor advisory violations.
@@ -35,6 +35,21 @@ route, UI, environment option, migration, repository method, or service remains.
 
 - **Moderate:** none observed in the 42-case Playwright matrix on 2026-09-10.
 - **Minor:** none observed in the 42-case Playwright matrix on 2026-09-10.
+
+## Local hardening work-item status
+
+| Work item | Status | Evidence |
+| --- | --- | --- |
+| WI-1 Local stand-ins | **DONE** | The opt-in local Compose override verified Mailpit delivery and a non-null-version MinIO object. |
+| WI-2 Invite-to-first-screenshot | **DONE** | One opt-in E2E covers invitation through source-agent screenshot plus revocation, re-enrollment, and privacy denial. |
+| WI-3 Manual local guide | **DONE** | `docs/LOCAL_TESTING.md` gives the complete local workflow and labels unverified OS steps. |
+| WI-4 Rate limiting | **DONE** | PostgreSQL-backed anonymous/web/device/replay limits, exemptions, 429, and Retry-After have regression tests. |
+| WI-5 Load baseline | **DONE** | The measured 10-minute, 2,436-request local MinIO baseline is recorded without making a production capacity claim. |
+| WI-6 Failure drills | **DONE** | The automated local drill passed SMTP, MinIO, PostgreSQL, and server outage/recovery cases without data loss. |
+| WI-7 Backup/restore | **DONE** | The isolated wipe/restore matched 69 tables, 1,860 rows, and 802 referenced objects and includes opt-in scheduling. |
+| WI-8 Monitoring | **DONE** | Eight vendor-neutral Prometheus alerts and the Grafana dashboard passed promtool/JSON validation. |
+| WI-9 Browser/accessibility | **DONE** | One pinned matrix passed 42 Chromium/Firefox/WebKit desktop/mobile cases with axe and overflow checks. |
+| WI-10 Operator handoff | **DONE** | The value-free configuration preflight has six tests, the runbook covers every requested operation/alert, and the operator checklist names exact inputs and commands. |
 
 ## Verified status of the nine reported items
 
@@ -57,42 +72,85 @@ separate real-provider or real-device production acceptance gate.
 
 | Area | Status | Evidence and consequence | Can I close it alone? |
 |---|---|---|---|
-| Invite → accept → download → enroll → first screenshot end-to-end | **PARTIAL** | Each boundary has automated coverage (`tests/test_accounts.py`, `test_project_page.py`, `test_agent_onboarding.py`, `test_activity_ingest.py`, and `test_s3_storage.py`), but there is no single real-device production run proving a signed installer and private S3 object through the whole flow. | I can automate more of the server path. Final proof needs your signed artifact, S3 credentials, SMTP, and a real target device. |
+| Invite → accept → download → enroll → first screenshot end-to-end | **LOCAL PATH DONE; PRODUCTION ACCEPTANCE BLOCKED** | `tests/test_local_onboarding_e2e.py` passes the complete local Mailpit/MinIO/source-agent path, revocation/re-enrollment, admin visibility, and cross-employee denial. It deliberately uses a pytest-only frame source and unsigned source agent. | Final proof needs a signed artifact, real SMTP/S3 credentials, and a target Windows/macOS/Linux device. |
 | Multi-organization data isolation | **CONFIRMED MISSING for shared SaaS** | `api/migrations.py` creates one `organization_settings` row with `id=1`; business tables have no `organization_id`. Role, project, team, device, report, and activity scope inside that one workspace are covered by `tests/test_authorization_matrix.py`, but two organizations cannot safely share this database. | I can build tenancy, but first you must choose shared SaaS versus one isolated deployment/database per company. Shared tenancy is a large schema/API migration. |
 | Authentication and authorization | **ACTUALLY DONE in automated scope; external acceptance pending** | Signed sessions, CSRF inventory, password/TOTP throttling, trusted hosts, CSP/HSTS, device bearer tokens, SSO validation, and project/role policies are implemented in `api/web.py`, `api/middleware.py`, and auth services; authorization/security tests pass. | I can fix code findings. Real IdP rotation/attack acceptance needs your provider tenant. |
-| General request rate limiting | **PARTIAL** | Password and TOTP attempts use PostgreSQL-backed throttling across replicas. Uploads have body limits and provider callbacks use signatures/deduplication, but there is no global per-IP/device API rate limiter. | I can add an application limiter, but you should choose the production proxy/API gateway and limits; proxy enforcement is preferable for volumetric abuse. |
-| Migrations | **ACTUALLY DONE** | `api/migrations.py` contains sequential migrations 1–60; `tests/test_database.py` verifies the recorded list. The full suite passed from an empty PostgreSQL database during this checkpoint. | No input needed for current schema. Production rollout still needs a pre-deploy backup and rehearsal. |
-| Error handling and durable retries | **PARTIAL** | Agent queues, integration claims/outboxes, payment reconciliation, bounded provider responses, idempotency, and readiness failure paths are tested. Live outage behavior has not been exercised against the chosen SMTP/S3/IdP/provider infrastructure. | I can run the drills after you supply disposable infrastructure and expected retry/SLO policy. |
-| Logging, metrics, and alerting | **PARTIAL** | `api/observability.py` emits privacy-limited JSON logs, correlation IDs, request/job metrics; `/livez`, `/readyz`, and protected `/metrics` are in `api/main.py`; tests pass. No deployed aggregation, exception sink, dashboards, paging rules, or retention evidence exists. | Needs your monitoring/hosting choice and alert destinations; I can provide/configure dashboards and alerts afterward. |
-| Backups and disaster recovery | **PARTIAL** | `scripts/backup_restore.py` creates authenticated encrypted PostgreSQL + exact-version object archives; tests and a small local drill are documented. No scheduled off-site production backup or representative RPO/RTO/failover drill exists. | Needs your backup location, key escrow owner, retention policy, RPO/RTO, PostgreSQL/S3 environment, and maintenance window. |
-| Capacity/performance | **PARTIAL** | `scripts/load_test.py` measures real timer/heartbeat/multipart screenshot ingestion and `tests/test_load_test.py` validates its safety contract. No representative 30-minute peak/2×-peak result, dashboard/report load, S3 latency, or failover profile exists. | Needs your launch concurrency, latency/error targets, and production-like environment. I can run and analyze it once supplied. |
+| General request rate limiting | **ACTUALLY DONE in application scope** | PostgreSQL fixed-window buckets cover anonymous, signed-in web, ordinary device, and high-volume replay requests consistently across replicas; tests cover 429, Retry-After, overrides, replay, and health exemptions. | A production edge/WAF remains advisable for volumetric attacks, but it is not an application-code gap. |
+| Migrations | **ACTUALLY DONE** | `api/migrations.py` contains sequential migrations 1–61; `tests/test_database.py` verifies the recorded list. The full suite passed from an empty PostgreSQL database during this checkpoint. | No input needed for current schema. Production rollout still needs a pre-deploy backup and rehearsal. |
+| Error handling and durable retries | **LOCAL DRILLS DONE; PRODUCTION VALIDATION BLOCKED** | Agent queues, integration claims/outboxes, payment reconciliation, idempotency, and readiness paths are tested; `scripts/local_failure_drills.py` passed SMTP, MinIO, PostgreSQL, and server local outages. | Live drills still need the chosen SMTP/S3/IdP/provider infrastructure and approved SLO policy. |
+| Logging, metrics, and alerting | **LOCAL STARTER DONE; DEPLOYMENT BLOCKED** | Privacy-limited logs, protected metrics, eight validated Prometheus alerts, a Grafana dashboard, and per-alert first response in `docs/runbook.md` are present. | Central aggregation, exception capture, scraper/dashboard deployment, paging, recipients, and retention need the production monitoring platform. |
+| Backups and disaster recovery | **LOCAL DRILL DONE; PRODUCTION SCHEDULING BLOCKED** | Authenticated encrypted PostgreSQL/exact-version object backup, opt-in systemd scheduling, and an isolated 69-table/802-object wipe-and-restore drill passed. | Off-site destination, escrow owner, retention, production schedule, RPO/RTO, and representative failover drill remain operator-owned. |
+| Capacity/performance | **LOCAL BASELINE DONE; PRODUCTION ENVELOPE BLOCKED** | A real 10-minute local run included dashboard, timesheet, report, heartbeat, and screenshot traffic: 2,436 requests, 4.059 req/s, zero errors, with p50/p95/p99 recorded. | Peak/2×-peak 30-minute runs need launch concurrency, latency/error targets, and production-like infrastructure. |
 | Mobile-store distribution | **PARTIAL** | `mobile/` contains the Expo/React Native tracker and CI/build instructions; code-level validation exists, but no signed App Store/Play build or real-device background/location acceptance has been recorded. | Needs Apple/Google/EAS accounts, signing credentials, privacy disclosures, and physical iOS/Android devices. |
 | Integration catalogue breadth | **CONFIRMED MISSING beyond current connectors** | Current production-oriented implementations cover GitHub, Jira, Asana, Slack, QuickBooks IIF, PayPal, and Wise. `docs/integration-catalog.md` records other catalogue gaps. | I can implement selected connectors, but you must prioritize vendors and provide developer/sandbox accounts. This is not one finite “clone everything” release item. |
 | Production topology | **PARTIAL** | `compose.yaml` is hardened for a local/single-host deployment, but it is not evidence of managed TLS, HA PostgreSQL, autoscaling, secret management, WAF/rate limits, S3 lifecycle/versioning, or multi-region recovery. | Needs your cloud, region, domain, budget, availability target, and single-tenant/multi-tenant decision. |
 
 ## Needs from you
 
-1. Decide whether each company gets an isolated Dayfinch deployment/database or the
-   product must become one multi-organization SaaS database.
-2. Choose the production cloud/region/domain, TLS/load balancer, managed PostgreSQL,
-   deployment platform, monitoring/exception system, availability target, and budget.
-3. Provide a private versioned S3-compatible bucket, SSE/KMS decision and scoped
-   credentials; provide a separate backup destination and escrowed backup key.
-4. Provide SMTP credentials, approved From address/domain, and a disposable mailbox.
-5. Provide Windows Authenticode PFX/timestamp policy, Apple Developer ID application
-   and installer certificates, App Store Connect notarization key, Ed25519 update
-   seed, release repository/CDN choice, and Linux signing/repository decision.
-6. Provide Windows 11, current macOS, X11 Linux, GNOME Wayland, and KDE Wayland test
-   devices; provide physical iOS and Android devices plus Apple/Google/EAS accounts.
-7. Provide disposable OIDC and SAML tenants plus SCIM token/client setup and key/
-   certificate rotation access.
-8. Provide disposable GitHub, Jira, Asana, Slack, PayPal, Wise, and the supported
-   QuickBooks Desktop environment; identify any additional connector required at launch.
-9. Set launch concurrency, request latency/error thresholds, RPO/RTO, data retention,
-   alert recipients, payroll currencies/countries, and compliance/privacy requirements.
+- [ ] **Core deployment:** set `TRACKER_ENVIRONMENT`, `TRACKER_PUBLIC_URL`,
+  `TRACKER_ALLOWED_HOSTS`, `TRACKER_COOKIE_SECURE`, `TRACKER_DATABASE_URL`,
+  `POSTGRES_PASSWORD`, `TRACKER_DATA_DIR`, `TRACKER_ADMIN_EMAIL`, `TRACKER_ADMIN_PASSWORD`,
+  `TRACKER_SESSION_SECRET`, `TRACKER_DOCUMENT_ENCRYPTION_KEY`, and
+  `TRACKER_INTEGRATION_ENCRYPTION_KEYS`. Verify format with
+  `.venv/bin/python scripts/check_config.py --env-file /etc/dayfinch/production.env --category core`.
+- [ ] **Private object storage:** set `TRACKER_STORAGE_BACKEND=s3`,
+  `TRACKER_S3_BUCKET`, `TRACKER_S3_REGION`, `TRACKER_S3_SSE`, optional
+  `TRACKER_S3_KMS_KEY_ID`/`TRACKER_S3_ENDPOINT_URL`, and scoped
+  `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` plus optional `AWS_SESSION_TOKEN`.
+  Verify format with `.venv/bin/python scripts/check_config.py --env-file
+  /etc/dayfinch/production.env --category s3`; separately prove bucket versioning
+  and exact-version read/write/delete with the provider.
+- [ ] **Email:** set `TRACKER_SMTP_HOST`, `TRACKER_SMTP_PORT`,
+  `TRACKER_SMTP_USERNAME`, `TRACKER_SMTP_PASSWORD`, `TRACKER_SMTP_FROM_EMAIL`,
+  `TRACKER_SMTP_STARTTLS`, and `TRACKER_SMTP_TIMEOUT_SECONDS`. Verify format with
+  `.venv/bin/python scripts/check_config.py --env-file /etc/dayfinch/production.env --category smtp`.
+- [ ] **Identity:** set `TRACKER_OIDC_ISSUER`, optional
+  `TRACKER_OIDC_DISCOVERY_URL`/`TRACKER_OIDC_END_SESSION_URL`,
+  `TRACKER_OIDC_CLIENT_ID`, `TRACKER_OIDC_CLIENT_SECRET`,
+  `TRACKER_OIDC_CLIENT_AUTH_METHOD`, `TRACKER_SAML_IDP_ENTITY_ID`,
+  `TRACKER_SAML_IDP_METADATA_B64`, `TRACKER_SAML_SP_PRIVATE_KEY_B64`,
+  `TRACKER_SAML_SP_CERTIFICATE_B64`, `TRACKER_SAML_EMAIL_ATTRIBUTE`, and
+  `TRACKER_SCIM_BEARER_TOKEN`. Verify format/key pairing with
+  `.venv/bin/python scripts/check_config.py --env-file /etc/dayfinch/production.env --category sso`.
+- [ ] **Signed desktop release:** set `WINDOWS_CERTIFICATE_PFX`,
+  `WINDOWS_CERTIFICATE_PASSWORD`, `WINDOWS_TIMESTAMP_URL`,
+  `MACOS_APPLICATION_CERTIFICATE_P12`, `MACOS_INSTALLER_CERTIFICATE_P12`,
+  `MACOS_CERTIFICATE_PASSWORD`, `MACOS_APPLICATION_IDENTITY`,
+  `MACOS_INSTALLER_IDENTITY`, `MACOS_NOTARY_API_KEY_P8`,
+  `MACOS_NOTARY_KEY_ID`, `MACOS_NOTARY_ISSUER`,
+  `DAYFINCH_UPDATE_SIGNING_KEY`, `TRACKER_AGENT_UPDATE_PUBLIC_KEY`,
+  `TRACKER_AGENT_UPDATE_MANIFEST_URL`, and all three
+  `TRACKER_AGENT_{WINDOWS,MACOS,LINUX}_URL` values. Verify local format and
+  signing-key pairing inside the trusted release environment with
+  `.venv/bin/python scripts/check_config.py --category signing`; never copy these
+  private signing inputs into the server environment. Only a tagged CI release and
+  real clean-device install proves certificate-backed acceptance.
+- [ ] **Provider integrations:** set `TRACKER_GITHUB_APP_SLUG`,
+  `TRACKER_GITHUB_CLIENT_ID`, `TRACKER_GITHUB_CLIENT_SECRET`,
+  `TRACKER_GITHUB_PRIVATE_KEY_B64`, `TRACKER_GITHUB_WEBHOOK_SECRET`, GitHub URL/
+  API-version settings, each Jira/Asana/Slack client ID and client secret plus its
+  URL settings, and `TRACKER_PAYMENT_PROVIDER` with the matching
+  `TRACKER_PAYMENT_WEBHOOK_*`, `TRACKER_PAYPAL_*`, or `TRACKER_WISE_*` values.
+  Verify format with `.venv/bin/python scripts/check_config.py --env-file
+  /etc/dayfinch/production.env --category integrations` and then run the real
+  disposable-provider matrix in `docs/testing-playbook.md`.
+- [ ] **Backups:** set a separately escrowed
+  `TRACKER_BACKUP_ENCRYPTION_KEY` and scoped absolute
+  `DAYFINCH_BACKUP_DESTINATION`. Verify format with `.venv/bin/python
+  scripts/check_config.py --env-file /etc/dayfinch/production.env --category backups`,
+  then run a disposable restore and record RPO/RTO.
+- [ ] **Monitoring:** set a unique `TRACKER_METRICS_BEARER_TOKEN`. Verify it with
+  `.venv/bin/python scripts/check_config.py --env-file /etc/dayfinch/production.env
+  --category monitoring`; validate the rules with the `promtool` command in
+  `deploy/monitoring/README.md`, import the dashboard, and configure the chosen
+  alert recipients.
 
 Do not place credentials in Git or chat. Put them in the selected secret manager or
-local ignored `.env` only for disposable acceptance work.
+mode-`0600` production environment file; use a local ignored `.env` only for
+disposable acceptance work. These format checks cannot choose the tenancy model,
+cloud/region/domain, SLOs, RPO/RTO, retention/compliance policy, alert recipients,
+or supported platform/provider catalogue. They also cannot replace acceptance on
+real Windows/macOS/Linux/iOS/Android devices and disposable IdP/provider accounts.
 
 ## Prioritized plan to production
 
@@ -115,8 +173,7 @@ local ignored `.env` only for disposable acceptance work.
 | Run real GitHub/Jira/Asana/Slack and PayPal/Wise/QuickBooks acceptance, lost-response, permission-loss, and key-rotation scenarios. | **1–2 weeks** | Provider sandboxes/apps |
 | Run 30-minute peak and 2×-peak capacity tests with dashboard/report traffic, set pool/replica sizes, and publish the capacity envelope. | **3–5 days** | Load targets and production-like stack |
 | Configure centralized logs, exception capture, dashboards, alerts, on-call routing, and retention. | **2–4 days** | Monitoring platform and recipients |
-| Add or configure general API/device rate limits and validate legitimate offline replay bursts. | **2–4 days** | Gateway choice and thresholds |
-| Complete cross-browser/responsive/accessibility and operational runbook acceptance. | **3–5 days** | Supported-browser matrix and operators |
+| Re-run the checked-in browser/accessibility suite and exercise the operational runbook in the production topology. | **1–2 days** | Supported-browser policy, deployment, and operators |
 
 ### P2 — later
 
@@ -192,3 +249,4 @@ in `docs/testing-playbook.md`; the authoritative remaining release register is
 - 2026-09-10 — WI-7 — DONE — An isolated local backup/wipe/restore matched exact inventories for 69 tables, 1,860 rows, and 802 referenced MinIO objects; an opt-in destination plus daily systemd scheduling example is included.
 - 2026-09-10 — WI-8 — DONE — Vendor-neutral Prometheus rules and a Grafana dashboard cover readiness, HTTP errors/mean latency, background-job failures, durable queue depths, and screenshot ingest failures, with promtool and JSON validation.
 - 2026-09-10 — WI-9 — DONE — One pinned Playwright run passed all 42 login, dashboard, project-enrollment, timesheet, report, screenshot, and settings checks across Chromium, Firefox, and WebKit at desktop/mobile widths, with no axe advisories or layout overflow.
+- 2026-09-10 — WI-10 — DONE — The read-only value-free preflight validates eight production configuration categories with six tests, while the runbook and exact-input checklist cover deploy, rollback, migration, rotation, revocation, restore, and all eight monitoring alerts.
