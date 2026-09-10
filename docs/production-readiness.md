@@ -30,13 +30,15 @@ headers are implemented. The blockers below remain authoritative.
 
 ### Backup/restore evidence
 
-The 2026-09-08 local drill produced a mode-`0600`, 112,677-byte encrypted archive
-from PostgreSQL 17 and restored it into an isolated database with separate storage.
-Source and target both had migration 22/22, 2 users, 1 project, 1 session, 7 audit
-events, and 0 activity objects. Authentication, hash, path-safety, exact S3-version,
-and target-confirmation cases are automated. This closes the mechanics, but not the
-release blocker: a scheduled off-site backup and a representative drill containing
-realistic screenshot/invoice volume still need measured RPO/RTO evidence.
+The 2026-09-10 local drill produced a 2,498,597-byte encrypted archive and restored
+it after deleting/recreating an isolated PostgreSQL database and versioned MinIO
+bucket. Exact inventories matched across 69 tables, 1,860 rows, and 802 referenced
+screenshot objects; backup took 10.331 seconds and restore took 19.675 seconds.
+Authentication, hash, path-safety, exact S3-version, and target-confirmation cases
+are automated. An opt-in destination override and systemd schedule example now
+exist. This closes local mechanics, but not the release blocker: production still
+needs an escrowed key, scheduled off-site destination/retention/alerts, and a
+representative environment drill proving the chosen RPO/RTO.
 
 ## Deployment invariants already enforced
 

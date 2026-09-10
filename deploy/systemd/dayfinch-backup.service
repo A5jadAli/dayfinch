@@ -1,0 +1,23 @@
+[Unit]
+Description=Create an encrypted Dayfinch database and object backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=dayfinch
+Group=dayfinch
+WorkingDirectory=/opt/dayfinch
+EnvironmentFile=/etc/dayfinch/backup.env
+ExecStart=/opt/dayfinch/scripts/scheduled_backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+# The script needs access to Docker and only the configured backup directory.
+# Adjust these paths if the checkout or destination differs.
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/dayfinch
+PrivateTmp=true
+NoNewPrivileges=true

@@ -181,6 +181,8 @@ docker compose start dayfinch-server
 
 Never test restore for the first time against production. The release drill in
 `docs/testing-playbook.md` uses an isolated database and verifies row/object hashes.
+An opt-in destination override, systemd timer example, and the measured local
+restore evidence are documented in `docs/backup-restore-drill.md`.
 
 ## Logs and metrics
 

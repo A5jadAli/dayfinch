@@ -1,0 +1,8 @@
+# Opt-in backup destination. This file only adds a host bind mount to the
+# operations container; it does not schedule or run a backup by itself.
+services:
+  dayfinch-ops:
+    volumes:
+      - type: bind
+        source: ${DAYFINCH_BACKUP_DESTINATION:?Set an absolute backup destination}
+        target: /backups

@@ -378,3 +378,8 @@ timestamp, size, PostgreSQL/object counts, duration, operator, and resulting RPO
 The default production objective is documented by the operator, not hard-coded in
 the app. A sensible starting point is a 24-hour RPO and four-hour RTO, tightened
 after measuring the representative dataset and business requirement.
+
+The repository's opt-in destination override, scheduled systemd example, exact
+inventory helper, and accepted isolated local run are recorded in
+`docs/backup-restore-drill.md`. That local stand-in evidence does not replace this
+production drill.

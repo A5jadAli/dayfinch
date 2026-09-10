@@ -24,6 +24,21 @@ services:
       minio-init:
         condition: service_completed_successfully
 
+  dayfinch-ops:
+    environment:
+      TRACKER_STORAGE_BACKEND: s3
+      TRACKER_S3_BUCKET: dayfinch-local-screenshots
+      TRACKER_S3_REGION: us-east-1
+      TRACKER_S3_ENDPOINT_URL: http://minio:9000
+      TRACKER_S3_SSE: ""
+      TRACKER_S3_KMS_KEY_ID: ""
+      AWS_ACCESS_KEY_ID: ${DAYFINCH_LOCAL_MINIO_USER:-dayfinch-local}
+      AWS_SECRET_ACCESS_KEY: ${DAYFINCH_LOCAL_MINIO_PASSWORD:-dayfinch-local-password}
+      AWS_SESSION_TOKEN: ""
+    depends_on:
+      minio-init:
+        condition: service_completed_successfully
+
   mailpit:
     image: axllent/mailpit:v1.31.1
     environment:
